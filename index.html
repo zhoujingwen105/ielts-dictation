@@ -365,6 +365,18 @@ input[type="range"]{width:120px}
         </span>
       </div>
     </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">数据管理</div>
+      <div class="setting-row">
+        <span class="setting-label">导出全部数据</span>
+        <button class="btn btn-outline btn-sm" id="btnExportData">导出 JSON</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">导入数据（会合并到现有数据）</span>
+        <input type="file" id="importDataFile" accept=".json" style="display:none">
+        <button class="btn btn-outline btn-sm" id="btnImportData">选择文件导入</button>
+      </div>
+    </div>
   </div>
 
   <!-- ===== 练习记录面板 ===== -->
@@ -457,6 +469,7 @@ const dom = {
   historyList: $('#historyList'), btnClearHistory: $('#btnClearHistory'),
   wrongMinCount: $('#wrongMinCount'), wrongMinCount2: $('#wrongMinCount2'),
   ttsEngine: $('#ttsEngine'), btnTestVoice: $('#btnTestVoice'),
+  btnExportData: $('#btnExportData'), btnImportData: $('#btnImportData'), importDataFile: $('#importDataFile'),
   rateSlider: $('#rateSlider'), rateValue: $('#rateValue'),
   pitchSlider: $('#pitchSlider'), pitchValue: $('#pitchValue'),
   intervalSelect: $('#intervalSelect'), repeatSelect: $('#repeatSelect'), voiceSelect: $('#voiceSelect'),
@@ -1382,6 +1395,57 @@ function renderPracticeHistory() {
   dom.historyList.innerHTML = h;
 }
 dom.btnClearHistory.addEventListener('click', () => { if (confirm('确定清空所有练习记录吗？')) { state.practiceHistory = []; savePracticeHistory(); renderPracticeHistory(); } });
+
+dom.btnExportData.addEventListener('click', () => {
+  const data = {
+    wordBooks: state.wordBooks,
+    folders: state.folders,
+    currentBookId: state.currentBookId,
+    wrongWords: state.wrongWords,
+    practiceHistory: state.practiceHistory,
+    settings: { rate: state.rate, pitch: state.pitch, interval: state.interval, repeatCount: state.repeatCount, ttsEngine: state.ttsEngine },
+    exportedAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'ielts-dictation-backup.json'; a.click();
+  URL.revokeObjectURL(url);
+});
+dom.btnImportData.addEventListener('click', () => { dom.importDataFile.click(); });
+dom.importDataFile.addEventListener('change', () => {
+  const file = dom.importDataFile.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.wordBooks && !data.wrongWords) { alert('无效的备份文件！'); return; }
+      if (data.wordBooks) {
+        data.wordBooks.forEach(b => { if (!state.wordBooks.find(x => x.id === b.id)) state.wordBooks.push(b); else { const existing = state.wordBooks.find(x => x.id === b.id); existing.words = b.words; existing.name = b.name; existing.folderId = b.folderId; } });
+        if (data.folders) data.folders.forEach(f => { if (!state.folders.find(x => x.id === f.id)) state.folders.push(f); });
+        if (data.currentBookId && !state.wordBooks.find(b => b.id === state.currentBookId)) state.currentBookId = data.currentBookId;
+      }
+      if (data.wrongWords) {
+        Object.entries(data.wrongWords).forEach(([bid, words]) => {
+          if (!state.wrongWords[bid]) state.wrongWords[bid] = {};
+          Object.entries(words).forEach(([w, info]) => {
+            if (!state.wrongWords[bid][w]) state.wrongWords[bid][w] = info;
+            else { const r = state.wrongWords[bid][w]; r.correct += info.correct; r.wrong += info.wrong; if (info.lastTime && info.lastTime > r.lastTime) r.lastTime = info.lastTime; if (info.translation) r.translation = info.translation; }
+          });
+        });
+      }
+      if (data.practiceHistory) {
+        data.practiceHistory.forEach(r => { if (!state.practiceHistory.find(x => x.id === r.id)) state.practiceHistory.push(r); });
+        state.practiceHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+      }
+      saveAll(); saveWrongWords(); savePracticeHistory();
+      renderBookTree(); renderWordList(); renderWrongWords(); renderPracticeHistory(); populateDictationBookSelect(); updateWrongBadge();
+      alert('数据导入成功！');
+    } catch(err) { alert('导入失败：文件格式错误'); }
+  };
+  reader.readAsText(file);
+  dom.importDataFile.value = '';
+});
 
 // ==================== 键盘 ====================
 document.addEventListener('keydown', e => {
