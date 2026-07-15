@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>雅思听力单词听写</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333;min-height:100vh}
+.header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:20px;text-align:center}
+.header h1{font-size:1.5rem;font-weight:600}
+.header p{font-size:.85rem;opacity:.85;margin-top:4px}
+.container{max-width:780px;margin:0 auto;padding:16px}
+
+.tabs{display:flex;background:#fff;border-radius:10px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tab{flex:1;padding:12px 8px;text-align:center;cursor:pointer;font-size:.9rem;border:none;background:#fff;color:#666;transition:all .2s;border-bottom:2px solid transparent}
+.tab:hover{color:#667eea}
+.tab.active{color:#667eea;border-bottom-color:#667eea;font-weight:600}
+.tab .badge{background:#e74c3c;color:#fff;border-radius:10px;padding:1px 6px;font-size:.7rem;margin-left:4px}
+
+.panel{display:none}
+.panel.active{display:block}
+
+.card{background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card-title{font-size:1rem;font-weight:600;margin-bottom:12px;color:#444;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+
+textarea{width:100%;height:130px;border:2px solid #e0e0e0;border-radius:8px;padding:12px;font-size:1rem;resize:vertical;font-family:inherit;transition:border-color .2s}
+textarea:focus{outline:none;border-color:#667eea}
+.hint-text{font-size:.78rem;color:#999;margin-top:6px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 20px;border:none;border-radius:8px;font-size:.9rem;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:#667eea;color:#fff}
+.btn-primary:hover:not(:disabled){background:#5a6fd6}
+.btn-success{background:#27ae60;color:#fff}
+.btn-success:hover:not(:disabled){background:#219a52}
+.btn-danger{background:#e74c3c;color:#fff}
+.btn-danger:hover:not(:disabled){background:#c0392b}
+.btn-outline{background:#fff;color:#667eea;border:2px solid #667eea}
+.btn-outline:hover:not(:disabled){background:#f0f0ff}
+.btn-sm{padding:6px 14px;font-size:.8rem}
+.btn-xs{padding:4px 10px;font-size:.75rem}
+.btn-group{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.btn-round{width:44px;height:44px;border-radius:50%;padding:0;font-size:1.2rem}
+
+/* 文件夹 */
+.folder-section{margin-bottom:14px}
+.folder-header{
+  display:flex;align-items:center;gap:8px;padding:8px 4px;
+  cursor:pointer;font-size:.9rem;font-weight:600;color:#555;
+  border-bottom:1px solid #eee;user-select:none;
+}
+.folder-header .folder-icon{font-size:1.1rem;transition:transform .2s}
+.folder-header.collapsed .folder-icon{transform:rotate(-90deg)}
+.folder-header .folder-count{font-size:.78rem;color:#999;font-weight:400}
+.folder-header .folder-actions{margin-left:auto;display:flex;gap:4px}
+.folder-header .folder-actions button{font-size:.7rem;padding:3px 8px}
+.folder-books{
+  display:flex;flex-wrap:wrap;gap:8px;padding:8px 4px 4px 20px;
+  transition:all .2s;
+}
+.folder-books.collapsed{display:none}
+
+/* 单词本书签 */
+.book-tab{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 14px;border-radius:20px;font-size:.85rem;
+  cursor:pointer;transition:all .2s;border:2px solid #e0e0e0;
+  background:#fafafa;color:#555;
+}
+.book-tab:hover{border-color:#667eea;background:#f0f0ff}
+.book-tab.active{background:#667eea;color:#fff;border-color:#667eea;font-weight:600}
+.book-tab .book-tab-count{font-size:.7rem;opacity:.7}
+.book-tab-menu{font-size:.7rem;cursor:pointer;opacity:.5;padding:0 2px}
+.book-tab-menu:hover{opacity:1}
+
+/* 无文件夹的占位 */
+.no-folder-books{
+  display:flex;flex-wrap:wrap;gap:8px;padding:8px 4px;
+}
+
+/* 空状态 */
+.empty-state{text-align:center;padding:30px 20px;color:#999}
+.empty-state .icon{font-size:2.5rem;margin-bottom:8px}
+.empty-state .hint{font-size:.8rem;color:#bbb}
+
+.word-list{display:flex;flex-wrap:wrap;gap:8px;max-height:320px;overflow-y:auto;padding:8px 0}
+.word-tag{display:inline-flex;flex-direction:column;align-items:center;background:#f0f0ff;color:#555;padding:8px 14px;border-radius:12px;font-size:.85rem;cursor:pointer;transition:all .2s;border:2px solid transparent;min-width:60px;text-align:center}
+.word-tag:hover{background:#e0e0ff}
+.word-tag.active{background:#667eea;color:#fff;border-color:#667eea;animation:pulse .6s ease-in-out}
+.word-tag.played{opacity:.5}
+.word-tag .tag-translation{font-size:.7rem;opacity:.7;margin-top:2px}
+.word-tag.active .tag-translation{opacity:1}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+
+/* 全局播放控制栏 */
+.playback-bar{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  background:#fff;border-radius:10px;margin-bottom:16px;
+  box-shadow:0 1px 3px rgba(0,0,0,.08);flex-wrap:wrap;
+  position:sticky;top:0;z-index:50;
+}
+.playback-controls{display:flex;align-items:center;gap:8px}
+.playback-info{flex:1;min-width:120px;text-align:center}
+.playback-word{font-size:1.3rem;font-weight:700;color:#667eea;letter-spacing:1px}
+.playback-trans{font-size:.8rem;color:#999}
+.playback-meta{display:flex;align-items:center;gap:8px}
+.playback-progress{font-size:.8rem;color:#888;white-space:nowrap}
+.playback-bar select{font-size:.8rem;padding:4px 8px;border-radius:6px;border:1px solid #ddd}
+.playback-bar .btn-round{width:38px;height:38px;font-size:1rem}
+
+.current-word-display{text-align:center;font-size:2.5rem;font-weight:700;color:#667eea;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.current-word-translation{font-size:1rem;color:#999;font-weight:400;margin-top:4px}
+.progress-info{text-align:center;color:#888;font-size:.85rem;margin:8px 0}
+
+.dictation-input{width:100%;padding:14px 18px;font-size:1.3rem;border:2px solid #e0e0e0;border-radius:8px;text-align:center;letter-spacing:2px;font-family:inherit;transition:all .2s}
+.dictation-input:focus{outline:none;border-color:#667eea}
+.dictation-input.correct{border-color:#27ae60;background:#f0fff4}
+.dictation-input.wrong{border-color:#e74c3c;background:#fff5f5}
+.result-feedback{text-align:center;font-size:1.1rem;min-height:28px;margin:8px 0}
+.result-feedback.correct{color:#27ae60}
+.result-feedback.wrong{color:#e74c3c}
+.result-feedback .translation-hint{font-size:.85rem;color:#888;margin-top:2px}
+
+.stats{display:flex;justify-content:center;gap:24px;text-align:center;flex-wrap:wrap}
+.stat-item{font-size:.85rem}
+.stat-value{font-size:1.5rem;font-weight:700}
+.stat-value.correct{color:#27ae60}
+.stat-value.wrong{color:#e74c3c}
+.stat-value.total{color:#667eea}
+
+.wrong-book-section{margin-bottom:16px}
+.wrong-book-header{font-size:.95rem;font-weight:600;color:#555;padding:8px 0;border-bottom:2px solid #f0f0f0;margin-bottom:8px;cursor:pointer;user-select:none}.wrong-book-header:hover{color:#333}.wrong-book-body.collapsed{display:none}.wrong-toggle-icon{display:inline-block;transition:transform .2s}.wrong-toggle-icon.rotated{transform:rotate(90deg)}
+.wrong-word-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #f0f0f0;gap:8px;flex-wrap:wrap}
+.wrong-word-item:last-child{border-bottom:none}
+.wrong-word-info{flex:1;min-width:120px}
+.wrong-word-text{font-size:1.05rem;font-weight:500}
+.wrong-word-trans{font-size:.8rem;color:#999}
+.wrong-word-meta{font-size:.8rem;color:#999;white-space:nowrap;text-align:right}
+.accuracy-bar{display:inline-block;height:6px;border-radius:3px;background:#e0e0e0;width:80px;vertical-align:middle;margin:0 4px}
+.accuracy-bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.accuracy-bar-fill.high{background:#27ae60}
+.accuracy-bar-fill.medium{background:#f39c12}
+.accuracy-bar-fill.low{background:#e74c3c}
+
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;gap:8px}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-size:.9rem;font-weight:500}
+select,input[type="range"]{font-size:.9rem}
+input[type="range"]{width:120px}
+.range-value{font-size:.85rem;color:#667eea;min-width:40px;text-align:right}
+.voice-quality{font-size:.7rem;padding:2px 6px;border-radius:4px;margin-left:6px}
+.voice-quality.high{background:#d4edda;color:#155724}
+.voice-quality.medium{background:#fff3cd;color:#856404}
+
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal{background:#fff;border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal h3{margin-bottom:12px;font-size:1.1rem}
+.modal input,.modal select{width:100%;padding:10px 14px;font-size:1rem;border:2px solid #e0e0e0;border-radius:8px;margin-bottom:10px}
+.modal input:focus,.modal select:focus{outline:none;border-color:#667eea}
+.modal .btn-group{justify-content:flex-end}
+
+@media(max-width:480px){
+  .header h1{font-size:1.2rem}
+  .playback-bar{padding:8px 10px;gap:6px}
+  .playback-word{font-size:1.1rem}
+  .playback-bar .btn-round{width:34px;height:34px;font-size:.9rem}
+  .dictation-input{font-size:1.1rem;padding:12px}
+  .tab{font-size:.75rem;padding:10px 4px}
+  .card{padding:14px}
+  .book-tab{font-size:.78rem;padding:6px 10px}
+  .folder-books{padding-left:12px}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>雅思听力单词听写</h1>
+  <p>粘贴单词，逐词朗读，听写自测</p>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" data-tab="wordlist">单词列表</button>
+    <button class="tab" data-tab="dictation">听写模式</button>
+    <button class="tab" data-tab="wrongbook">错词本<span class="badge" id="wrongCount" style="display:none">0</span></button>
+    <button class="tab" data-tab="history">练习记录</button>
+    <button class="tab" data-tab="settings">设置</button>
+  </div>
+
+  <!-- ===== 单词列表面板 ===== -->
+  <div class="panel active" id="panel-wordlist">
+    <!-- 播放控制栏 -->
+    <div class="playback-bar" id="playbackBar">
+      <div class="playback-controls">
+        <button class="btn btn-outline btn-round btn-sm-round" id="btnPrev" title="上一个">⏮</button>
+        <button class="btn btn-primary btn-round" id="btnPlay" title="播放" style="width:46px;height:46px;font-size:1.3rem;">▶</button>
+        <button class="btn btn-outline btn-round btn-sm-round" id="btnNext" title="下一个">⏭</button>
+      </div>
+      <div class="playback-info">
+        <div class="playback-word" id="currentWordDisplay"></div>
+        <div class="playback-trans" id="currentWordTranslation"></div>
+      </div>
+      <div class="playback-meta">
+        <span class="playback-progress" id="progressInfo"></span>
+        <select id="playMode">
+          <option value="sequential">顺序</option>
+          <option value="random">随机</option>
+          <option value="loop">循环</option>
+        </select>
+      </div>
+    </div>
+    <!-- 单词本管理 -->
+    <div class="card">
+      <div class="card-title">
+        单词本
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-outline btn-xs" id="btnNewFolder">+ 文件夹</button>
+          <button class="btn btn-success btn-xs" id="btnNewBook">+ 单词本</button>
+        </div>
+      </div>
+      <div id="bookTree">
+        <div class="empty-state"><div class="icon">📝</div><div class="hint">点击 "+ 文件夹" 创建分类，再点击 "+ 单词本" 添加单词本</div></div>
+      </div>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="card">
+      <div class="card-title">粘贴单词 <span style="font-weight:400;font-size:.8rem;color:#888" id="currentBookLabel"></span></div>
+      <textarea id="wordInput" placeholder="在此粘贴英文单词，每行一个，可附带中文释义&#10;支持格式：&#10;apple 苹果&#10;banana - 香蕉&#10;cherry&#10;dog 狗"></textarea>
+      <div class="hint-text">支持格式：<code>单词 释义</code> 或 <code>单词 - 释义</code>，也支持逗号空格分隔。</div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="btnParse">导入到当前单词本</button>
+        <button class="btn btn-outline" id="btnParseNew">导入为新单词本</button>
+        <button class="btn btn-outline" id="btnClear">清空输入框</button>
+        <span style="margin-left:auto;color:#888;font-size:.85rem;align-self:center" id="wordCount">共 0 个单词</span>
+      </div>
+    </div>
+
+    <!-- 单词列表 -->
+    <div class="card">
+      <div class="card-title">单词列表 <span style="font-weight:400;font-size:.85rem;color:#888" id="bookInfo"></span></div>
+      <div class="word-list" id="wordList">
+        <div class="empty-state"><div class="icon">📝</div>请先选择或创建单词本并导入单词</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== 听写模式面板 ===== -->
+  <div class="panel" id="panel-dictation">
+    <div class="card" style="text-align:center">
+      <div class="card-title">听写模式</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="font-size:.85rem;color:#888">单词本：</span>
+        <select id="dictationBookSelect" style="font-size:.85rem;padding:6px 10px;border-radius:6px;border:1px solid #ddd;max-width:280px">
+          <option value="__current__">当前单词本</option>
+          <option value="__wrong__">错词合集</option>
+        </select>
+        <span style="font-size:.85rem;color:#888" id="wrongFilterLabel">最小错误次数：</span>
+        <input type="number" id="wrongMinCount" value="1" min="1" max="99" style="width:55px;font-size:.85rem;padding:6px 8px;border-radius:6px;border:1px solid #ddd;text-align:center">
+      </div>
+      <p style="color:#888;font-size:.85rem;margin-bottom:12px">点击播放听单词，输入你听到的内容，回车确认</p>
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+        <label style="font-size:.85rem;color:#888;cursor:pointer"><input type="radio" name="dictationMode" value="onebyone" checked> 逐个模式</label>
+        <label style="font-size:.85rem;color:#888;cursor:pointer"><input type="radio" name="dictationMode" value="continuous"> 连续模式</label>
+      </div>
+      <button class="btn btn-primary" id="btnDictationPlay" style="font-size:1.2rem;padding:14px 40px">▶ 开始听写</button>
+      <button class="btn btn-outline btn-sm" id="btnDictationRepeat" style="margin-left:8px">重播</button>
+      <button class="btn btn-outline btn-sm" id="btnDictationSkip" style="margin-left:8px">跳过</button>
+      <button class="btn btn-outline btn-sm" id="btnDictationPrev" style="margin-left:8px;display:none">⏮ 上一个</button>
+      <button class="btn btn-outline btn-sm" id="btnDictationNext" style="margin-left:8px;display:none">下一个 ⏭</button>
+      <button class="btn btn-outline btn-sm" id="btnDictationPause" style="margin-left:8px;display:none">⏸ 暂停</button>
+      <div style="margin-top:20px">
+        <input type="text" class="dictation-input" id="dictationInput"
+               placeholder="在此输入你听到的单词..." disabled
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="result-feedback" id="resultFeedback"></div>
+      <div class="stats" style="margin-top:16px">
+        <div class="stat-item"><div class="stat-value total" id="statTotal">0</div><div>总计</div></div>
+        <div class="stat-item"><div class="stat-value correct" id="statCorrect">0</div><div>正确</div></div>
+        <div class="stat-item"><div class="stat-value wrong" id="statWrong">0</div><div>错误</div></div>
+        <div class="stat-item"><div class="stat-value" id="statAccuracy" style="color:#667eea">-</div><div>正确率</div></div>
+      </div>
+      <div class="btn-group" style="justify-content:center">
+        <button class="btn btn-outline btn-sm" id="btnDictationRestart">重新开始</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 错词本面板 ===== -->
+  <div class="panel" id="panel-wrongbook">
+    <div class="card">
+      <div class="card-title">
+        错词本
+        <div>
+          <span style="font-size:.8rem;color:#888;margin-right:4px">最小错误次数：</span>
+          <input type="number" id="wrongMinCount2" value="1" min="1" max="99" style="width:50px;font-size:.8rem;padding:5px 6px;border-radius:6px;border:1px solid #ddd;text-align:center;margin-right:8px">
+          <button class="btn btn-success btn-sm" id="btnDictateWrong">听写错词</button>
+          <button class="btn btn-outline btn-sm" id="btnExportWrong">导出文本</button>
+          <button class="btn btn-danger btn-sm" id="btnClearWrong">清空</button>
+        </div>
+      </div>
+      <div id="wrongWordList">
+        <div class="empty-state"><div class="icon">🎉</div>暂无错词，继续加油！</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 设置面板 ===== -->
+  <div class="panel" id="panel-settings">
+    <div class="card">
+      <div class="card-title">语音设置</div>
+      <div class="setting-row">
+        <span class="setting-label">TTS 引擎</span>
+        <select id="ttsEngine">
+          <option value="web-speech">浏览器内置语音（免联网）</option>
+          <option value="google">Google TTS（需翻墙，更自然）</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">语音测试</span>
+        <button class="btn btn-outline btn-sm" id="btnTestVoice">试听 "hello"</button>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">语速 (Rate)</span>
+        <input type="range" id="rateSlider" min="0.5" max="2" step="0.1" value="0.85">
+        <span class="range-value" id="rateValue">0.85x</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">音调 (Pitch)</span>
+        <input type="range" id="pitchSlider" min="0.5" max="2" step="0.1" value="1">
+        <span class="range-value" id="pitchValue">1.0</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">单词间隔</span>
+        <select id="intervalSelect">
+          <option value="1">1 秒</option>
+          <option value="1.5" selected>1.5 秒</option>
+          <option value="2">2 秒</option>
+          <option value="3">3 秒</option>
+          <option value="5">5 秒</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">重复次数</span>
+        <select id="repeatSelect">
+          <option value="1" selected>1 次</option>
+          <option value="2">2 次</option>
+          <option value="3">3 次</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">语音选择</span>
+        <select id="voiceSelect"><option value="">加载中...</option></select>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label" style="color:#888;font-size:.8rem;line-height:1.5">
+          需要更自然的语音？<br>
+          <b>Mac：</b>系统设置 → 辅助功能 → 朗读内容 → 管理语音 → 下载 "Samantha (增强)" 或 "Ava"<br>
+          <b>Chrome 浏览器：</b>自带 Google 神经网络语音，选含 "Google" 的语音质量最佳
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 练习记录面板 ===== -->
+  <div class="panel" id="panel-history">
+    <div class="card">
+      <div class="card-title">
+        练习记录
+        <button class="btn btn-danger btn-sm" id="btnClearHistory">清空记录</button>
+      </div>
+      <div id="historyList">
+        <div class="empty-state"><div class="icon">📋</div>暂无练习记录</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 弹窗 -->
+<div class="modal-overlay" id="modalNewBook">
+  <div class="modal">
+    <h3 id="modalTitle">新建单词本</h3>
+    <input type="text" id="modalBookName" placeholder="输入单词本名称..." maxlength="50">
+    <select id="modalBookFolder"><option value="">归属文件夹（可选）</option></select>
+    <div class="btn-group">
+      <button class="btn btn-outline" id="btnModalCancel">取消</button>
+      <button class="btn btn-primary" id="btnModalConfirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalFolder">
+  <div class="modal">
+    <h3 id="modalFolderTitle">新建文件夹</h3>
+    <input type="text" id="modalFolderName" placeholder="输入文件夹名称..." maxlength="30">
+    <div class="btn-group">
+      <button class="btn btn-outline" id="btnFolderCancel">取消</button>
+      <button class="btn btn-primary" id="btnFolderConfirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== 全局状态 ====================
+const state = {
+  folders: [],              // [{id, name, createdAt}]
+  wordBooks: [],            // [{id, name, folderId, words: [{text,translation}], createdAt}]
+  currentBookId: null,
+  currentIndex: -1,
+  isPlaying: false,
+  playMode: 'sequential',
+  rate: 0.85, pitch: 1, interval: 1500, repeatCount: 1,
+  ttsEngine: 'web-speech',
+  selectedVoice: null, voices: [],
+  // 听写
+  dictationWords: [], dictationIndex: -1,
+  dictationTotal: 0, dictationCorrect: 0, dictationWrong: 0,
+  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationTimer: null, dictationPaused: false,
+  // 错词本: { [bookId]: { [word]: { correct, wrong, lastTime, translation } } }
+  wrongWords: {},
+  practiceHistory: [],
+  playedIndices: new Set(), randomQueue: [],
+  modalCallback: null, folderModalCallback: null,
+};
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function shuffleArray(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } }
+
+function currentBook() { return state.wordBooks.find(b => b.id === state.currentBookId) || null; }
+function currentWords() { const b = currentBook(); return b ? b.words : []; }
+
+// ==================== DOM 引用 ====================
+const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+const dom = {
+  tabs: $$('.tab'), panels: $$('.panel'),
+  bookTree: $('#bookTree'), btnNewFolder: $('#btnNewFolder'), btnNewBook: $('#btnNewBook'),
+  currentBookLabel: $('#currentBookLabel'), bookInfo: $('#bookInfo'),
+  wordInput: $('#wordInput'), wordCount: $('#wordCount'),
+  wordList: $('#wordList'), btnParse: $('#btnParse'), btnParseNew: $('#btnParseNew'), btnClear: $('#btnClear'),
+  currentWordDisplay: $('#currentWordDisplay'), currentWordTranslation: $('#currentWordTranslation'),
+  progressInfo: $('#progressInfo'),
+  btnPlay: $('#btnPlay'), btnPrev: $('#btnPrev'), btnNext: $('#btnNext'), playMode: $('#playMode'),
+  btnDictationPlay: $('#btnDictationPlay'), btnDictationRepeat: $('#btnDictationRepeat'),
+  btnDictationSkip: $('#btnDictationSkip'), btnDictationPrev: $('#btnDictationPrev'), btnDictationNext: $('#btnDictationNext'), btnDictationPause: $('#btnDictationPause'), dictationInput: $('#dictationInput'),
+  dictationBookSelect: $('#dictationBookSelect'),
+  resultFeedback: $('#resultFeedback'),
+  statTotal: $('#statTotal'), statCorrect: $('#statCorrect'), statWrong: $('#statWrong'), statAccuracy: $('#statAccuracy'),
+  btnDictationRestart: $('#btnDictationRestart'),
+  wrongWordList: $('#wrongWordList'), wrongCount: $('#wrongCount'),
+  btnDictateWrong: $('#btnDictateWrong'), btnExportWrong: $('#btnExportWrong'), btnClearWrong: $('#btnClearWrong'),
+  historyList: $('#historyList'), btnClearHistory: $('#btnClearHistory'),
+  wrongMinCount: $('#wrongMinCount'), wrongMinCount2: $('#wrongMinCount2'),
+  ttsEngine: $('#ttsEngine'), btnTestVoice: $('#btnTestVoice'),
+  rateSlider: $('#rateSlider'), rateValue: $('#rateValue'),
+  pitchSlider: $('#pitchSlider'), pitchValue: $('#pitchValue'),
+  intervalSelect: $('#intervalSelect'), repeatSelect: $('#repeatSelect'), voiceSelect: $('#voiceSelect'),
+  // 单词本弹窗
+  modalOverlay: $('#modalNewBook'), modalTitle: $('#modalTitle'),
+  modalBookName: $('#modalBookName'), modalBookFolder: $('#modalBookFolder'),
+  btnModalCancel: $('#btnModalCancel'), btnModalConfirm: $('#btnModalConfirm'),
+  // 文件夹弹窗
+  modalFolder: $('#modalFolder'), modalFolderTitle: $('#modalFolderTitle'),
+  modalFolderName: $('#modalFolderName'),
+  btnFolderCancel: $('#btnFolderCancel'), btnFolderConfirm: $('#btnFolderConfirm'),
+};
+
+// ==================== 标签 ====================
+dom.tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    const t = tab.dataset.tab;
+    dom.tabs.forEach(x => x.classList.remove('active'));
+    tab.classList.add('active');
+    dom.panels.forEach(p => p.classList.remove('active'));
+    const p = $(`#panel-${t}`); if (p) p.classList.add('active');
+    if (t === 'wrongbook') renderWrongWords();
+    if (t === 'dictation') populateDictationBookSelect();
+    if (t === 'history') renderPracticeHistory();
+  });
+});
+
+// ==================== 弹窗 ====================
+function showModal(title, callback) {
+  dom.modalTitle.textContent = title;
+  dom.modalBookName.value = '';
+  // 填充文件夹选项
+  dom.modalBookFolder.innerHTML = '<option value="">无文件夹</option>' +
+    state.folders.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+  dom.modalBookFolder.value = '';
+  dom.modalOverlay.classList.add('active');
+  state.modalCallback = callback;
+  setTimeout(() => { try { dom.modalBookName.focus(); } catch(e) {} }, 150);
+}
+function hideModal() { dom.modalOverlay.classList.remove('active'); state.modalCallback = null; }
+dom.btnModalCancel.addEventListener('click', hideModal);
+dom.btnModalConfirm.addEventListener('click', () => {
+  const name = dom.modalBookName.value.trim();
+  if (!name) { dom.modalBookName.focus(); return; }
+  const folderId = dom.modalBookFolder.value || null;
+  const cb = state.modalCallback;
+  hideModal();
+  if (cb) cb(name, folderId);
+});
+dom.modalBookName.addEventListener('keydown', e => { if (e.key === 'Enter') dom.btnModalConfirm.click(); });
+dom.modalOverlay.addEventListener('click', e => { if (e.target === dom.modalOverlay) hideModal(); });
+
+// 文件夹弹窗
+function showFolderModal(title, callback) {
+  dom.modalFolderTitle.textContent = title;
+  dom.modalFolderName.value = '';
+  dom.modalFolder.classList.add('active');
+  state.folderModalCallback = callback;
+  setTimeout(() => { try { dom.modalFolderName.focus(); } catch(e) {} }, 150);
+}
+function hideFolderModal() { dom.modalFolder.classList.remove('active'); state.folderModalCallback = null; }
+dom.btnFolderCancel.addEventListener('click', hideFolderModal);
+dom.btnFolderConfirm.addEventListener('click', () => {
+  const name = dom.modalFolderName.value.trim();
+  if (!name) { dom.modalFolderName.focus(); return; }
+  const cb = state.folderModalCallback;
+  hideFolderModal();
+  if (cb) cb(name);
+});
+dom.modalFolderName.addEventListener('keydown', e => { if (e.key === 'Enter') dom.btnFolderConfirm.click(); });
+dom.modalFolder.addEventListener('click', e => { if (e.target === dom.modalFolder) hideFolderModal(); });
+
+// ==================== 文件夹管理 ====================
+function createFolder(name) {
+  const folder = { id: genId(), name, createdAt: new Date().toISOString() };
+  state.folders.push(folder);
+  saveAll();
+  renderBookTree();
+  return folder;
+}
+function renameFolder(id, newName) {
+  const f = state.folders.find(x => x.id === id);
+  if (f) { f.name = newName; saveAll(); renderBookTree(); }
+}
+function deleteFolder(id) {
+  const f = state.folders.find(x => x.id === id);
+  if (!f) return;
+  const bookCount = state.wordBooks.filter(b => b.folderId === id).length;
+  if (bookCount > 0) {
+    if (!confirm(`文件夹「${f.name}」中有 ${bookCount} 个单词本，删除文件夹后它们将移到"未分类"。确定吗？`)) return;
+    state.wordBooks.forEach(b => { if (b.folderId === id) b.folderId = null; });
+  }
+  state.folders = state.folders.filter(x => x.id !== id);
+  saveAll();
+  renderBookTree();
+}
+
+// ==================== 单词本管理 ====================
+function createBook(name, folderId, words) {
+  const book = {
+    id: genId(), name, folderId: folderId || null,
+    words: words || [], createdAt: new Date().toISOString(),
+  };
+  state.wordBooks.push(book);
+  state.currentBookId = book.id;
+  saveAll();
+  renderBookTree();
+  renderWordList();
+  updatePlayUI();
+  updateCurrentBookLabel();
+  return book;
+}
+
+function deleteBook(id) {
+  const book = state.wordBooks.find(b => b.id === id);
+  if (!book) return;
+  if (!confirm(`确定删除单词本「${book.name}」吗？包含 ${book.words.length} 个单词，不可恢复。`)) return;
+  state.wordBooks = state.wordBooks.filter(b => b.id !== id);
+  if (state.currentBookId === id) state.currentBookId = state.wordBooks.length > 0 ? state.wordBooks[0].id : null;
+  delete state.wrongWords[id];
+  saveWrongWords();
+  stopPlayback();
+  saveAll();
+  renderBookTree();
+  renderWordList();
+  updatePlayUI();
+  updateCurrentBookLabel();
+}
+
+function renameBook(id, newName) {
+  const book = state.wordBooks.find(b => b.id === id);
+  if (book) { book.name = newName; saveAll(); renderBookTree(); updateCurrentBookLabel(); }
+}
+
+function moveBook(bookId, newFolderId) {
+  const book = state.wordBooks.find(b => b.id === bookId);
+  if (book) { book.folderId = newFolderId || null; saveAll(); renderBookTree(); }
+}
+
+function exportBook(id) {
+  const book = state.wordBooks.find(b => b.id === id);
+  if (!book || book.words.length === 0) { alert('单词本为空！'); return; }
+  const text = book.words.map(w => w.translation ? `${w.text} ${w.translation}` : w.text).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${book.name}.txt`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function selectBook(id) {
+  if (id === state.currentBookId) return;
+  state.currentBookId = id;
+  state.currentIndex = -1;
+  state.playedIndices = new Set();
+  state.randomQueue = [];
+  stopPlayback();
+  saveAll();
+  renderBookTree();
+  renderWordList();
+  updatePlayUI();
+  updateCurrentBookLabel();
+}
+
+function updateCurrentBookLabel() {
+  const book = currentBook();
+  dom.currentBookLabel.textContent = book ? `→ ${book.name}` : '（未选择单词本）';
+  dom.wordCount.textContent = book ? `共 ${book.words.length} 个单词` : '共 0 个单词';
+}
+
+// ==================== 单词本树渲染 ====================
+function renderBookTree() {
+  const totalBooks = state.wordBooks.length;
+  if (totalBooks === 0 && state.folders.length === 0) {
+    dom.bookTree.innerHTML = '<div class="empty-state"><div class="icon">📝</div><div class="hint">点击 "+ 文件夹" 创建分类，再点击 "+ 单词本" 添加单词本</div></div>';
+    updateCurrentBookLabel();
+    return;
+  }
+
+  let html = '';
+
+  // 渲染每个文件夹及其下的单词本
+  state.folders.forEach(folder => {
+    const books = state.wordBooks.filter(b => b.folderId === folder.id);
+    html += `<div class="folder-section">`;
+    html += `<div class="folder-header" data-folder="${folder.id}">
+      <span class="folder-icon">▼</span>
+      <span>📁 ${folder.name}</span>
+      <span class="folder-count">${books.length}本</span>
+      <span class="folder-actions">
+        <button class="btn btn-outline btn-xs" data-action="add-book-folder" data-fid="${folder.id}">+单词本</button>
+        <button class="btn btn-outline btn-xs" data-action="rename-folder" data-fid="${folder.id}">改名</button>
+        <button class="btn btn-danger btn-xs" data-action="delete-folder" data-fid="${folder.id}">删</button>
+      </span>
+    </div>`;
+    html += `<div class="folder-books" data-folder-books="${folder.id}">`;
+    if (books.length === 0) {
+      html += '<span style="color:#ccc;font-size:.8rem;padding:4px">暂无单词本</span>';
+    } else {
+      books.forEach(book => {
+        const active = book.id === state.currentBookId ? ' active' : '';
+        html += `<span class="book-tab${active}" data-book="${book.id}">
+          📖 ${book.name} <span class="book-tab-count">(${book.words.length}词)</span>
+        </span>`;
+      });
+    }
+    html += `</div></div>`;
+  });
+
+  // 未分类的单词本
+  const uncategorized = state.wordBooks.filter(b => !b.folderId);
+  if (uncategorized.length > 0 || state.folders.length === 0) {
+    html += `<div class="folder-section">`;
+    html += `<div class="folder-header" data-folder="__none__">
+      <span class="folder-icon">▼</span>
+      <span>📂 未分类</span>
+      <span class="folder-count">${uncategorized.length}本</span>
+      <span class="folder-actions">
+        <button class="btn btn-outline btn-xs" data-action="add-book-uncat">+单词本</button>
+      </span>
+    </div>`;
+    html += `<div class="folder-books" data-folder-books="__none__">`;
+    if (uncategorized.length === 0) {
+      html += '<span style="color:#ccc;font-size:.8rem;padding:4px">暂无单词本</span>';
+    } else {
+      uncategorized.forEach(book => {
+        const active = book.id === state.currentBookId ? ' active' : '';
+        html += `<span class="book-tab${active}" data-book="${book.id}">
+          📖 ${book.name} <span class="book-tab-count">(${book.words.length}词)</span>
+        </span>`;
+      });
+    }
+    html += `</div></div>`;
+  }
+
+  dom.bookTree.innerHTML = html;
+  updateCurrentBookLabel();
+
+  // 绑定事件：折叠/展开
+  dom.bookTree.querySelectorAll('.folder-header').forEach(header => {
+    header.addEventListener('click', (e) => {
+      // 不拦截按钮点击
+      if (e.target.tagName === 'BUTTON') return;
+      const fid = header.dataset.folder;
+      const booksDiv = dom.bookTree.querySelector(`[data-folder-books="${fid}"]`);
+      if (booksDiv) {
+        const collapsed = booksDiv.classList.toggle('collapsed');
+        header.classList.toggle('collapsed', collapsed);
+      }
+    });
+  });
+
+  // 绑定事件：点击单词本切换
+  dom.bookTree.querySelectorAll('.book-tab').forEach(tab => {
+    tab.addEventListener('click', () => selectBook(tab.dataset.book));
+    // 右键菜单
+    tab.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showBookContextMenu(tab.dataset.book, e.clientX, e.clientY);
+    });
+  });
+
+  // 绑定事件：文件夹操作按钮
+  dom.bookTree.querySelectorAll('[data-action="add-book-folder"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fid = btn.dataset.fid;
+      showModal('新建单词本', (name, _fid) => {
+        createBook(name, fid, []);
+      });
+    });
+  });
+  dom.bookTree.querySelectorAll('[data-action="add-book-uncat"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showModal('新建单词本', (name, fid) => {
+        createBook(name, fid || null, []);
+      });
+    });
+  });
+  dom.bookTree.querySelectorAll('[data-action="rename-folder"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fid = btn.dataset.fid;
+      const f = state.folders.find(x => x.id === fid);
+      if (f) showFolderModal('重命名文件夹', (name) => renameFolder(fid, name));
+    });
+  });
+  dom.bookTree.querySelectorAll('[data-action="delete-folder"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteFolder(btn.dataset.fid);
+    });
+  });
+
+  updateCurrentBookLabel();
+  populateDictationBookSelect();
+}
+
+function showBookContextMenu(bookId, x, y) {
+  const book = state.wordBooks.find(b => b.id === bookId);
+  if (!book) return;
+  // 简单方案：用 prompt + confirm
+  const actions = ['改名', '导出', '删除', '移动到文件夹', '取消'];
+  // 手机端更友好的方式
+  const menu = document.createElement('div');
+  menu.style.cssText = `position:fixed;top:${y}px;left:${x}px;background:#fff;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:2000;padding:4px;min-width:140px`;
+  const items = [
+    { label: '✏️ 改名', action: () => {
+      showModal('重命名单词本', (name) => renameBook(bookId, name));
+    }},
+    { label: '📤 导出', action: () => exportBook(bookId) },
+    { label: '📁 移动到...', action: () => {
+      const folders = state.folders;
+      const names = ['未分类', ...folders.map(f => f.name)];
+      const ids = [null, ...folders.map(f => f.id)];
+      const choice = prompt(`选择目标文件夹：\n${names.map((n, i) => `${i + 1}. ${n}`).join('\n')}\n输入序号 (1-${names.length})`);
+      if (choice) {
+        const idx = parseInt(choice) - 1;
+        if (idx >= 0 && idx < ids.length) moveBook(bookId, ids[idx]);
+      }
+    }},
+    { label: '🗑 删除', action: () => deleteBook(bookId) },
+    { label: '取消', action: () => {} },
+  ];
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.textContent = item.label;
+    div.style.cssText = 'padding:8px 14px;cursor:pointer;border-radius:6px;font-size:.85rem';
+    div.onmouseenter = () => div.style.background = '#f0f0ff';
+    div.onmouseleave = () => div.style.background = '';
+    div.onclick = () => { item.action(); menu.remove(); };
+    menu.appendChild(div);
+  });
+  document.body.appendChild(menu);
+  const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); } };
+  setTimeout(() => document.addEventListener('click', close), 0);
+}
+
+// ==================== 存储 ====================
+function loadAll() {
+  try {
+    const data = localStorage.getItem('ielts_wordbooks');
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (parsed.books) {
+        state.wordBooks = parsed.books;
+        state.folders = parsed.folders || [];
+        state.currentBookId = parsed.currentBookId || (state.wordBooks.length > 0 ? state.wordBooks[0].id : null);
+      } else if (Array.isArray(parsed)) {
+        state.wordBooks = parsed;
+        state.folders = [];
+        state.currentBookId = parsed.length > 0 ? parsed[0].id : null;
+      }
+      // 确保每个 book 有 folderId 字段
+      state.wordBooks.forEach(b => { if (b.folderId === undefined) b.folderId = null; });
+    } else {
+      migrateOldData();
+    }
+  } catch(e) { console.warn('加载失败', e); state.wordBooks = []; state.folders = []; state.currentBookId = null; }
+}
+
+function saveAll() {
+  localStorage.setItem('ielts_wordbooks', JSON.stringify({
+    folders: state.folders,
+    books: state.wordBooks,
+    currentBookId: state.currentBookId,
+  }));
+}
+
+function migrateOldData() {
+  const oldWords = localStorage.getItem('ielts_words');
+  if (oldWords) {
+    try {
+      const words = JSON.parse(oldWords);
+      if (Array.isArray(words) && words.length > 0) {
+        state.folders = [];
+        state.wordBooks = [{
+          id: genId(), name: '我的单词本', folderId: null,
+          words: words.map(w => typeof w === 'string' ? { text: w, translation: '' } : w),
+          createdAt: new Date().toISOString(),
+        }];
+        state.currentBookId = state.wordBooks[0].id;
+        saveAll();
+        localStorage.removeItem('ielts_words');
+        return;
+      }
+    } catch(e) {}
+  }
+  state.wordBooks = []; state.folders = []; state.currentBookId = null;
+  saveAll();
+}
+
+function saveWrongWords() { localStorage.setItem('ielts_wrongwords', JSON.stringify(state.wrongWords)); updateWrongBadge(); }
+function loadPracticeHistory() { try { state.practiceHistory = JSON.parse(localStorage.getItem('ielts_practice_history') || '[]'); } catch(e) { state.practiceHistory = []; } }
+function savePracticeHistory() { localStorage.setItem('ielts_practice_history', JSON.stringify(state.practiceHistory)); }
+
+// ==================== 单词解析 ====================
+function parseWordLine(line) {
+  const t = line.trim();
+  if (!t) return null;
+  const dm = t.match(/^(.+?)\s*[-—]\s*(.+)$/);
+  if (dm) { const tx = dm[1].trim(); if (/[a-zA-Z]/.test(tx)) return { text: tx, translation: dm[2].trim() }; }
+  const sm = t.match(/^([a-zA-Z][a-zA-Z\s'-]*?)\s+([一-鿿].+)$/);
+  if (sm) return { text: sm[1].trim(), translation: sm[2].trim() };
+  if (/[a-zA-Z]/.test(t)) return { text: t, translation: '' };
+  return null;
+}
+
+function parseWords() {
+  const raw = dom.wordInput.value.trim();
+  if (!raw) return [];
+  const result = [];
+  raw.split(/\n/).forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    if (!/[一-鿿]/.test(trimmed) && /[,，\s]/.test(trimmed)) {
+      trimmed.split(/[,，\s]+/).filter(p => p.length > 0 && /[a-zA-Z]/.test(p)).forEach(p => result.push({ text: p, translation: '' }));
+    } else {
+      const p = parseWordLine(trimmed);
+      if (p) result.push(p);
+    }
+  });
+  return result;
+}
+
+// ==================== 导入 ====================
+function importToCurrentBook() {
+  const words = parseWords();
+  if (words.length === 0) { alert('未识别到有效单词！'); return; }
+  let book = currentBook();
+  if (!book) {
+    showModal('新建单词本', (name, fid) => { createBook(name, fid || null, words); dom.wordInput.value = ''; });
+    return;
+  }
+  const existing = new Set(book.words.map(w => w.text.toLowerCase()));
+  let added = 0;
+  words.forEach(w => { if (!existing.has(w.text.toLowerCase())) { book.words.push(w); existing.add(w.text.toLowerCase()); added++; } });
+  saveAll();
+  renderBookTree(); renderWordList(); updatePlayUI();
+  dom.wordInput.value = '';
+  const skipped = words.length - added;
+  if (skipped > 0) { dom.wordCount.textContent = `共 ${book.words.length} 个单词（新增 ${added}，跳过重复 ${skipped}）`; setTimeout(() => updateCurrentBookLabel(), 2500); }
+}
+
+function importAsNewBook() {
+  const words = parseWords();
+  if (words.length === 0) { alert('未识别到有效单词！'); return; }
+  showModal('新建单词本', (name, fid) => { createBook(name, fid || null, words); dom.wordInput.value = ''; });
+}
+
+// ==================== 单词列表渲染 ====================
+function renderWordList() {
+  const words = currentWords();
+  if (words.length === 0) {
+    dom.wordList.innerHTML = '<div class="empty-state"><div class="icon">📝</div>请先选择或创建单词本并导入单词</div>';
+    dom.bookInfo.textContent = '';
+    return;
+  }
+  dom.wordList.innerHTML = words.map((w, i) => {
+    const th = w.translation ? `<span class="tag-translation">${w.translation}</span>` : '';
+    return `<span class="word-tag" data-index="${i}">${w.text}${th}</span>`;
+  }).join('');
+  dom.wordList.querySelectorAll('.word-tag').forEach(tag => {
+    tag.addEventListener('click', () => jumpToWord(parseInt(tag.dataset.index)));
+  });
+  const book = currentBook();
+  if (book) dom.bookInfo.textContent = `创建于 ${new Date(book.createdAt).toLocaleDateString('zh-CN')}`;
+}
+
+function updateWordHighlight() {
+  dom.wordList.querySelectorAll('.word-tag').forEach((tag, i) => {
+    tag.classList.remove('active');
+    if (i === state.currentIndex) tag.classList.add('active');
+    if (state.playedIndices.has(i)) tag.classList.add('played');
+  });
+}
+
+// ==================== TTS ====================
+function speakWordWebSpeech(word) {
+  return new Promise((resolve) => {
+    const u = new SpeechSynthesisUtterance(word);
+    u.rate = state.rate; u.pitch = state.pitch;
+    if (state.selectedVoice) u.voice = state.selectedVoice;
+    u.onend = () => resolve(); u.onerror = () => resolve();
+    speechSynthesis.speak(u);
+  });
+}
+function speakWordGoogle(word) {
+  return new Promise((resolve) => {
+    const audio = new Audio();
+    audio.src = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(word)}&tl=en-GB`;
+    let resolved = false;
+    const done = () => { if (!resolved) { resolved = true; resolve(); } };
+    audio.onended = done;
+    audio.onerror = () => { speakWordWebSpeech(word).then(done); };
+    audio.play().catch(() => { speakWordWebSpeech(word).then(done); });
+    setTimeout(() => { if (!resolved) { audio.pause(); audio.src = ''; speakWordWebSpeech(word).then(done); } }, 5000);
+  });
+}
+function speakWord(word) {
+  const clean = word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '').trim();
+  return state.ttsEngine === 'google' ? speakWordGoogle(clean) : speakWordWebSpeech(clean);
+}
+
+// ==================== 语音选择 ====================
+function scoreVoice(voice) {
+  let s = 0;
+  const n = voice.name.toLowerCase();
+  if (/neural|natural|premium|enhanced|wavenet/.test(n)) s += 5;
+  if (/samantha|google|ava|allison|zoe|microsoft|amazon/.test(n)) s += 3;
+  if (voice.localService) s += 2;
+  if (voice.lang.toLowerCase().startsWith('en-gb')) s += 2;
+  else if (voice.lang.toLowerCase().startsWith('en-us')) s += 1;
+  else if (!voice.lang.toLowerCase().startsWith('en')) s -= 2;
+  return s;
+}
+function loadVoices() {
+  state.voices = speechSynthesis.getVoices();
+  if (state.voices.length === 0) return;
+  const en = state.voices.filter(v => v.lang.startsWith('en')).sort((a,b) => scoreVoice(b) - scoreVoice(a));
+  const ot = state.voices.filter(v => !v.lang.startsWith('en')).sort((a,b) => scoreVoice(b) - scoreVoice(a));
+  dom.voiceSelect.innerHTML = [...en, ...ot].map(v => {
+    const sc = scoreVoice(v);
+    return `<option value="${v.name}">${v.name} (${v.lang})${sc >= 7 ? '<span class="voice-quality high">高质</span>' : (sc >= 4 ? '<span class="voice-quality medium">普通</span>' : '')}</option>`;
+  }).join('');
+  const sv = localStorage.getItem('ielts_voice');
+  if (sv && state.voices.find(v => v.name === sv)) { state.selectedVoice = state.voices.find(v => v.name === sv); dom.voiceSelect.value = sv; }
+  else if (en.length > 0) { state.selectedVoice = en[0]; dom.voiceSelect.value = en[0].name; }
+}
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+// ==================== 设置 ====================
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('ielts_settings') || '{}');
+    if (s.rate != null) { state.rate = s.rate; dom.rateSlider.value = s.rate; dom.rateValue.textContent = s.rate + 'x'; }
+    if (s.pitch != null) { state.pitch = s.pitch; dom.pitchSlider.value = s.pitch; dom.pitchValue.textContent = s.pitch; }
+    if (s.interval) { state.interval = s.interval; dom.intervalSelect.value = s.interval / 1000; }
+    if (s.repeatCount) { state.repeatCount = s.repeatCount; dom.repeatSelect.value = s.repeatCount; }
+    if (s.ttsEngine) { state.ttsEngine = s.ttsEngine; dom.ttsEngine.value = s.ttsEngine; }
+    state.wrongWords = JSON.parse(localStorage.getItem('ielts_wrongwords') || '{}');
+  } catch(e) { state.wrongWords = {}; }
+}
+function saveSettings() { localStorage.setItem('ielts_settings', JSON.stringify({ rate: state.rate, pitch: state.pitch, interval: state.interval, repeatCount: state.repeatCount, ttsEngine: state.ttsEngine })); }
+
+dom.ttsEngine.addEventListener('change', () => { state.ttsEngine = dom.ttsEngine.value; saveSettings(); });
+dom.btnTestVoice.addEventListener('click', () => { speakWord('hello'); });
+dom.rateSlider.addEventListener('input', () => { state.rate = +dom.rateSlider.value; dom.rateValue.textContent = state.rate + 'x'; saveSettings(); });
+dom.pitchSlider.addEventListener('input', () => { state.pitch = +dom.pitchSlider.value; dom.pitchValue.textContent = state.pitch; saveSettings(); });
+dom.intervalSelect.addEventListener('change', () => { state.interval = +dom.intervalSelect.value * 1000; saveSettings(); });
+dom.repeatSelect.addEventListener('change', () => { state.repeatCount = +dom.repeatSelect.value; saveSettings(); });
+dom.voiceSelect.addEventListener('change', () => { const v = state.voices.find(x => x.name === dom.voiceSelect.value); if (v) { state.selectedVoice = v; localStorage.setItem('ielts_voice', v.name); } });
+
+// ==================== 播放 ====================
+async function playWordAtIndex(index) {
+  const words = currentWords();
+  if (index < 0 || index >= words.length) return;
+  state.currentIndex = index;
+  const w = words[index];
+  updatePlayUI(); updateWordHighlight();
+  dom.currentWordDisplay.textContent = w.text;
+  dom.currentWordTranslation.textContent = w.translation || '';
+  dom.progressInfo.textContent = `${index + 1} / ${words.length}`;
+  const tag = dom.wordList.querySelector(`.word-tag[data-index="${index}"]`);
+  if (tag) tag.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  for (let r = 0; r < state.repeatCount; r++) { if (!state.isPlaying) break; await speakWord(w.text); }
+  state.playedIndices.add(index); updateWordHighlight();
+}
+
+async function startPlayback() {
+  const words = currentWords();
+  if (words.length === 0) return;
+  state.isPlaying = true; updatePlayUI();
+  if (state.currentIndex < 0 || state.currentIndex >= words.length) state.currentIndex = -1;
+  while (state.isPlaying) {
+    let ni;
+    if (state.playMode === 'sequential') { ni = (state.currentIndex + 1) % words.length; if (ni === 0 && state.currentIndex >= 0) { state.isPlaying = false; updatePlayUI(); break; } }
+    else if (state.playMode === 'random') { if (state.randomQueue.length === 0) { state.randomQueue = [...Array(words.length).keys()]; shuffleArray(state.randomQueue); } ni = state.randomQueue.pop(); }
+    else { ni = state.currentIndex; }
+    await playWordAtIndex(ni);
+    if (state.isPlaying && state.playMode !== 'loop') await sleep(state.interval);
+    else if (state.isPlaying) await sleep(800);
+  }
+  state.isPlaying = false; updatePlayUI();
+}
+
+function stopPlayback() { state.isPlaying = false; speechSynthesis.cancel(); updatePlayUI(); }
+function jumpToWord(index) {
+  const words = currentWords(); const wp = state.isPlaying; stopPlayback();
+  state.currentIndex = index;
+  if (words[index]) { dom.currentWordDisplay.textContent = words[index].text; dom.currentWordTranslation.textContent = words[index].translation || ''; }
+  dom.progressInfo.textContent = words.length > 0 ? `${index + 1} / ${words.length}` : '';
+  updateWordHighlight();
+  if (words[index]) speakWord(words[index].text);
+  if (wp) { state.isPlaying = true; updatePlayUI(); }
+}
+
+function updatePlayUI() {
+  if (state.isPlaying) { dom.btnPlay.innerHTML = '⏸'; dom.btnPlay.classList.add('btn-danger'); dom.btnPlay.classList.remove('btn-primary'); }
+  else { dom.btnPlay.innerHTML = '▶'; dom.btnPlay.classList.add('btn-primary'); dom.btnPlay.classList.remove('btn-danger'); }
+  const words = currentWords(); const hw = words.length > 0;
+  dom.btnPrev.disabled = !hw || state.currentIndex <= 0;
+  dom.btnNext.disabled = !hw || state.currentIndex >= words.length - 1;
+  if (!state.isPlaying && state.currentIndex < 0) { dom.currentWordDisplay.textContent = ''; dom.currentWordTranslation.textContent = ''; dom.progressInfo.textContent = ''; }
+}
+
+// ==================== 事件 ====================
+dom.btnNewFolder.addEventListener('click', () => { showFolderModal('新建文件夹', (name) => createFolder(name)); });
+dom.btnNewBook.addEventListener('click', () => { const w = parseWords(); showModal(w.length > 0 ? '新建单词本（将导入输入框中的单词）' : '新建单词本', (name, fid) => { createBook(name, fid || null, w); dom.wordInput.value = ''; }); });
+dom.btnParse.addEventListener('click', importToCurrentBook);
+dom.btnParseNew.addEventListener('click', importAsNewBook);
+dom.btnClear.addEventListener('click', () => { dom.wordInput.value = ''; });
+dom.btnPlay.addEventListener('click', () => { if (state.isPlaying) stopPlayback(); else startPlayback(); });
+dom.btnPrev.addEventListener('click', () => { if (state.currentIndex > 0) jumpToWord(state.currentIndex - 1); });
+dom.btnNext.addEventListener('click', () => { const w = currentWords(); if (state.currentIndex < w.length - 1) jumpToWord(state.currentIndex + 1); });
+dom.playMode.addEventListener('change', () => { state.playMode = dom.playMode.value; state.randomQueue = []; });
+
+// ==================== 听写 ====================
+// 填充听写模式的单词本选择器
+function populateDictationBookSelect() {
+  let html = '<option value="__current__">当前单词本</option>';
+  // 按文件夹分组
+  state.folders.forEach(f => {
+    const books = state.wordBooks.filter(b => b.folderId === f.id);
+    if (books.length > 0) {
+      html += `<optgroup label="📁 ${f.name}">`;
+      books.forEach(b => html += `<option value="${b.id}">${b.name} (${b.words.length}词)</option>`);
+      html += '</optgroup>';
+    }
+  });
+  const uncat = state.wordBooks.filter(b => !b.folderId);
+  if (uncat.length > 0) {
+    html += '<optgroup label="📂 未分类">';
+    uncat.forEach(b => html += `<option value="${b.id}">${b.name} (${b.words.length}词)</option>`);
+    html += '</optgroup>';
+  }
+  html += '<option value="__wrong__">错词合集</option>';
+  dom.dictationBookSelect.innerHTML = html;
+}
+
+function getDictationWords() {
+  const val = dom.dictationBookSelect.value;
+  if (val === '__current__') {
+    return { words: currentWords(), bookId: state.currentBookId };
+  }
+  if (val === '__wrong__') {
+    const minCount = parseInt(dom.wrongMinCount.value) || 1;
+    const aw = []; const seen = new Set();
+    Object.entries(state.wrongWords).forEach(([bid, words]) => {
+      Object.entries(words).forEach(([w, info]) => {
+        if (!seen.has(w) && info.wrong >= minCount) { seen.add(w); aw.push({ text: w, translation: info.translation || '', bookId: bid }); }
+      });
+    });
+    return { words: aw, bookId: null };
+  }
+  // 特定单词本
+  const book = state.wordBooks.find(b => b.id === val);
+  if (book) return { words: book.words, bookId: book.id };
+  return { words: currentWords(), bookId: state.currentBookId };
+}
+
+function startDictation() {
+  const { words, bookId } = getDictationWords();
+  if (words.length === 0) { alert('所选单词本为空！'); return; }
+  initDictation(words, bookId);
+  playDictationWord();
+}
+
+function initDictation(wordObjs, sourceBookId) {
+  if (!wordObjs || wordObjs.length === 0) { const w = currentWords(); if (w.length === 0) { alert('当前单词本为空！'); return; } wordObjs = w; sourceBookId = state.currentBookId; }
+  stopPlayback(); clearTimeout(state.dictationTimer);
+  state.dictationWords = wordObjs.map(w => ({ text: w.text || w, translation: w.translation || '', bookId: w.bookId || sourceBookId || state.currentBookId || '' }));
+  state.dictationSourceBookId = sourceBookId || state.currentBookId || '';
+  state.dictationIndex = -1; state.dictationTotal = 0; state.dictationCorrect = 0; state.dictationWrong = 0;
+  state.dictationCurrentWord = null; state.dictationEnabled = true; state.dictationPaused = false;
+  updateDictationStats();
+  dom.resultFeedback.textContent = ''; dom.resultFeedback.className = 'result-feedback';
+  dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
+  dom.dictationInput.disabled = true; dom.dictationInput.focus();
+  dom.btnDictationPlay.disabled = false;
+  dom.btnDictationPause.style.display = ''; dom.btnDictationPause.textContent = '⏸ 暂停';
+  dom.btnDictationPrev.style.display = ''; dom.btnDictationNext.style.display = '';
+}
+
+function updateDictationStats() {
+  dom.statTotal.textContent = state.dictationTotal;
+  dom.statCorrect.textContent = state.dictationCorrect;
+  dom.statWrong.textContent = state.dictationWrong;
+  dom.statAccuracy.textContent = state.dictationTotal > 0 ? Math.round((state.dictationCorrect / state.dictationTotal) * 100) + '%' : '-';
+}
+
+function getNextDictationWord() { if (state.dictationIndex >= state.dictationWords.length - 1) return null; state.dictationIndex++; return state.dictationWords[state.dictationIndex]; }
+
+function isContinuousMode() { return document.querySelector('input[name="dictationMode"]:checked').value === 'continuous'; }
+
+function autoSkipCurrentWord() {
+  if (!state.dictationEnabled || state.dictationPaused || !state.dictationCurrentWord) return;
+  const c = state.dictationCurrentWord; state.dictationTotal++; state.dictationWrong++;
+  recordWordResult(c, false); updateDictationStats();
+  dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
+  dom.dictationInput.disabled = true;
+  const th = c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
+  dom.resultFeedback.innerHTML = `⏰ 时间到！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong';
+  state.dictationTimer = setTimeout(() => { dom.dictationInput.disabled = false; playDictationWord(); }, 1500);
+}
+
+async function playDictationWord() {
+  if (!state.dictationEnabled || state.dictationPaused) return;
+  clearTimeout(state.dictationTimer);
+  const wo = getNextDictationWord();
+  if (!wo) {
+    dom.resultFeedback.innerHTML = '全部单词已完成！'; dom.resultFeedback.className = 'result-feedback correct';
+    dom.btnDictationPlay.disabled = true; dom.dictationInput.disabled = true;
+    dom.btnDictationPause.style.display = 'none'; dom.btnDictationPrev.style.display = 'none'; dom.btnDictationNext.style.display = 'none';
+    if (state.dictationTotal > 0) {
+      const sel = dom.dictationBookSelect.selectedOptions[0];
+      const bookName = sel ? sel.textContent : '未知';
+      state.practiceHistory.unshift({
+        id: genId(), bookName, date: new Date().toLocaleString('zh-CN'),
+        total: state.dictationTotal, correct: state.dictationCorrect, wrong: state.dictationWrong,
+        accuracy: Math.round((state.dictationCorrect / state.dictationTotal) * 100)
+      });
+      if (state.practiceHistory.length > 100) state.practiceHistory = state.practiceHistory.slice(0, 100);
+      savePracticeHistory(); renderPracticeHistory();
+    }
+    return;
+  }
+  state.dictationCurrentWord = wo; dom.btnDictationPlay.disabled = true;
+  dom.btnDictationPrev.disabled = state.dictationIndex <= 0;
+  dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.resultFeedback.textContent = ''; dom.resultFeedback.className = 'result-feedback';
+  if (!isContinuousMode()) dom.dictationInput.disabled = true;
+  await speakWord(wo.text);
+  if (state.dictationPaused) return;
+  dom.dictationInput.disabled = false; dom.dictationInput.focus();
+  if (isContinuousMode()) state.dictationTimer = setTimeout(autoSkipCurrentWord, state.interval);
+}
+
+function recordWordResult(wordObj, isCorrect) {
+  const bid = wordObj.bookId || state.dictationSourceBookId || '__global__';
+  const key = wordObj.text.toLowerCase();
+  if (!state.wrongWords[bid]) state.wrongWords[bid] = {};
+  const exists = !!state.wrongWords[bid][key];
+  if (!exists && !isCorrect) { state.wrongWords[bid][key] = { correct: 0, wrong: 0, lastTime: '', translation: '' }; }
+  if (!exists && isCorrect) return;
+  const r = state.wrongWords[bid][key];
+  if (isCorrect) r.correct++; else r.wrong++;
+  r.lastTime = new Date().toLocaleString('zh-CN');
+  if (wordObj.translation) r.translation = wordObj.translation;
+  saveWrongWords();
+}
+
+function checkDictationAnswer() {
+  const ua = dom.dictationInput.value.trim();
+  if (!ua || !state.dictationCurrentWord) return;
+  clearTimeout(state.dictationTimer);
+  const c = state.dictationCurrentWord; state.dictationTotal++;
+  const isC = ua.toLowerCase() === c.text.toLowerCase();
+  const th = c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
+  recordWordResult(c, isC);
+  if (isC) { state.dictationCorrect++; dom.dictationInput.className = 'dictation-input correct'; dom.resultFeedback.innerHTML = `✓ 正确！${th}`; dom.resultFeedback.className = 'result-feedback correct'; }
+  else { state.dictationWrong++; dom.dictationInput.className = 'dictation-input wrong'; dom.resultFeedback.innerHTML = `✗ 错误！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong'; }
+  updateDictationStats();
+  if (isContinuousMode()) { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
+  else { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1800); }
+}
+
+function updateWrongBadge() {
+  let t = 0; Object.values(state.wrongWords).forEach(b => { Object.values(b).forEach(r => { if (r.wrong > 0) t++; }); });
+  if (t > 0) { dom.wrongCount.textContent = t; dom.wrongCount.style.display = 'inline'; }
+  else { dom.wrongCount.style.display = 'none'; }
+}
+
+dom.btnDictationPlay.addEventListener('click', startDictation);
+dom.btnDictationRepeat.addEventListener('click', () => { if (state.dictationCurrentWord) speakWord(state.dictationCurrentWord.text); });
+dom.btnDictationSkip.addEventListener('click', () => {
+  if (!state.dictationEnabled) return;
+  clearTimeout(state.dictationTimer);
+  const c = state.dictationCurrentWord; state.dictationTotal++; state.dictationWrong++; recordWordResult(c, false);
+  updateDictationStats(); dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
+  const th = c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
+  dom.resultFeedback.innerHTML = `已跳过，正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong';
+  if (isContinuousMode()) { playDictationWord(); }
+  else { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
+});
+dom.btnDictationPrev.addEventListener('click', () => {
+  if (!state.dictationEnabled || state.dictationPaused || state.dictationIndex <= 0) return;
+  clearTimeout(state.dictationTimer);
+  state.dictationIndex -= 2;
+  dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
+  dom.resultFeedback.textContent = ''; dom.resultFeedback.className = 'result-feedback';
+  playDictationWord();
+});
+dom.btnDictationNext.addEventListener('click', () => {
+  if (!state.dictationEnabled || state.dictationPaused) return;
+  clearTimeout(state.dictationTimer);
+  const c = state.dictationCurrentWord;
+  if (c) { state.dictationTotal++; state.dictationWrong++; recordWordResult(c, false); updateDictationStats(); }
+  dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
+  const th = c && c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
+  dom.resultFeedback.innerHTML = c ? `已跳过，正确拼写：<b>${c.text}</b>${th}` : '';
+  dom.resultFeedback.className = 'result-feedback wrong';
+  if (isContinuousMode()) { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
+  else { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
+});
+
+dom.btnDictationPause.addEventListener('click', async () => {
+  if (!state.dictationEnabled) return;
+  if (state.dictationPaused) {
+    state.dictationPaused = false;
+    dom.btnDictationPause.textContent = '⏸ 暂停';
+    dom.dictationInput.disabled = false;
+    dom.dictationInput.focus();
+    await speakWord(state.dictationCurrentWord.text);
+    if (state.dictationPaused) return;
+    if (isContinuousMode()) state.dictationTimer = setTimeout(autoSkipCurrentWord, state.interval);
+  } else {
+    state.dictationPaused = true;
+    speechSynthesis.cancel();
+    clearTimeout(state.dictationTimer);
+    dom.dictationInput.disabled = true;
+    dom.btnDictationPause.textContent = '▶ 继续';
+  }
+});
+dom.dictationInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); checkDictationAnswer(); } });
+dom.btnDictationRestart.addEventListener('click', startDictation);
+dom.dictationBookSelect.addEventListener('change', () => {
+  const isWrong = dom.dictationBookSelect.value === '__wrong__';
+  dom.wrongMinCount.style.display = isWrong ? '' : 'none';
+  document.getElementById('wrongFilterLabel').style.display = isWrong ? '' : 'none';
+});
+dom.wrongMinCount.addEventListener('input', () => { dom.wrongMinCount2.value = dom.wrongMinCount.value; });
+dom.wrongMinCount2.addEventListener('input', () => { dom.wrongMinCount.value = dom.wrongMinCount2.value; });
+// Initialize filter visibility
+dom.wrongMinCount.style.display = 'none';
+document.getElementById('wrongFilterLabel').style.display = 'none';
+
+// ==================== 错词本 ====================
+function getWordAccuracy(r) { const t = r.correct + r.wrong; return t === 0 ? 0 : Math.round((r.correct / t) * 100); }
+
+function renderWrongWords() {
+  const bids = Object.keys(state.wrongWords).filter(bid => Object.values(state.wrongWords[bid]).some(r => r.wrong > 0));
+  if (bids.length === 0) { dom.wrongWordList.innerHTML = '<div class="empty-state"><div class="icon">🎉</div>暂无错词，继续加油！</div>'; return; }
+  let h = '';
+  bids.forEach(bid => {
+    const book = state.wordBooks.find(b => b.id === bid);
+    const bn = book ? book.name : (bid === '__global__' ? '全局' : '未知');
+    const es = Object.entries(state.wrongWords[bid]).filter(e => e[1].wrong > 0).sort((a, b) => b[1].wrong - a[1].wrong);
+    if (es.length === 0) return;
+    h += `<div class="wrong-book-section"><div class="wrong-book-header" data-bid="${bid}" data-action="toggleWrong">📖 ${bn}（${es.length} 个错词） <span class="wrong-toggle-icon" style="font-size:.75rem;color:#aaa">▸</span></div><div class="wrong-book-body" data-bid="${bid}">`;
+    es.forEach(([word, info]) => {
+      const tr = info.translation ? `<div class="wrong-word-trans">${info.translation}</div>` : '';
+      h += `<div class="wrong-word-item">
+        <div class="wrong-word-info"><span class="wrong-word-text">${word}</span>${tr}</div>
+        <div class="wrong-word-meta">错误 <strong>${info.wrong}</strong> 次 (对${info.correct}/错${info.wrong})<div style="font-size:.7rem;color:#aaa">${info.lastTime}</div></div>
+        <button class="btn btn-outline btn-xs" data-word="${word}" data-bid="${bid}" data-action="replay">读</button>
+        <button class="btn btn-danger btn-xs" data-word="${word}" data-bid="${bid}" data-action="delete">删</button>
+      </div>`;
+    });
+    h += `</div></div>`;
+  });
+  dom.wrongWordList.innerHTML = h;
+  dom.wrongWordList.querySelectorAll('[data-action="replay"]').forEach(b => b.addEventListener('click', () => speakWord(b.dataset.word)));
+  dom.wrongWordList.querySelectorAll('[data-action="delete"]').forEach(b => b.addEventListener('click', () => {
+    const bid = b.dataset.bid; const w = b.dataset.word;
+    if (state.wrongWords[bid]) { delete state.wrongWords[bid][w]; if (Object.keys(state.wrongWords[bid]).length === 0) delete state.wrongWords[bid]; }
+    saveWrongWords(); renderWrongWords();
+  }));
+  dom.wrongWordList.querySelectorAll('[data-action="toggleWrong"]').forEach(hdr => hdr.addEventListener('click', () => {
+    const bid = hdr.dataset.bid;
+    const body = dom.wrongWordList.querySelector(`.wrong-book-body[data-bid="${bid}"]`);
+    const icon = hdr.querySelector('.wrong-toggle-icon');
+    if (body) { body.classList.toggle('collapsed'); icon.classList.toggle('rotated'); }
+  }));
+}
+
+dom.btnDictateWrong.addEventListener('click', () => {
+  const minCount = parseInt(dom.wrongMinCount2.value) || 1;
+  const aw = []; const seen = new Set();
+  Object.entries(state.wrongWords).forEach(([bid, words]) => { Object.entries(words).forEach(([w, info]) => { if (!seen.has(w) && info.wrong >= minCount) { seen.add(w); aw.push({ text: w, translation: info.translation || '', bookId: bid }); } }); });
+  if (aw.length === 0) { alert('错词本为空！'); return; }
+  dom.tabs.forEach(t => t.classList.remove('active')); const dt = $$('.tab[data-tab="dictation"]')[0]; if (dt) dt.classList.add('active');
+  dom.panels.forEach(p => p.classList.remove('active')); const dp = $('#panel-dictation'); if (dp) dp.classList.add('active');
+  dom.dictationBookSelect.value = '__wrong__';
+  dom.wrongMinCount.value = minCount;
+  startDictation();
+});
+
+dom.btnExportWrong.addEventListener('click', () => {
+  const aw = [];
+  Object.entries(state.wrongWords).forEach(([bid, words]) => {
+    const book = state.wordBooks.find(b => b.id === bid);
+    Object.entries(words).forEach(([w, info]) => { aw.push({ word: w, trans: info.translation, book: book ? book.name : bid, acc: getWordAccuracy(info) }); });
+  });
+  if (aw.length === 0) { alert('错词本为空！'); return; }
+  aw.sort((a, b) => b.acc - a.acc);
+  const text = aw.map(x => `${x.word}${x.trans ? ' ' + x.trans : ''} [${x.book} 正确率${x.acc}%]`).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' }); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'ielts-wrong-words.txt'; a.click(); URL.revokeObjectURL(url);
+});
+
+dom.btnClearWrong.addEventListener('click', () => { if (confirm('确定清空所有错词记录吗？')) { state.wrongWords = {}; saveWrongWords(); renderWrongWords(); } });
+
+// ==================== 练习记录 ====================
+function renderPracticeHistory() {
+  if (state.practiceHistory.length === 0) { dom.historyList.innerHTML = '<div class="empty-state"><div class="icon">📋</div>暂无练习记录</div>'; return; }
+  let h = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem"><thead><tr style="border-bottom:2px solid #eee">';
+  h += '<th style="padding:8px;text-align:left">时间</th><th style="padding:8px;text-align:left">单词本</th><th style="padding:8px;text-align:center">总计</th><th style="padding:8px;text-align:center">正确</th><th style="padding:8px;text-align:center">错误</th><th style="padding:8px;text-align:center">正确率</th>';
+  h += '</tr></thead><tbody>';
+  state.practiceHistory.forEach(r => {
+    const ac = r.accuracy >= 80 ? 'color:#22c55e;font-weight:700' : r.accuracy >= 50 ? 'color:#f59e0b;font-weight:700' : 'color:#ef4444;font-weight:700';
+    h += `<tr style="border-bottom:1px solid #f0f0f0">
+      <td style="padding:8px;color:#888;white-space:nowrap">${r.date}</td>
+      <td style="padding:8px">${r.bookName}</td>
+      <td style="padding:8px;text-align:center">${r.total}</td>
+      <td style="padding:8px;text-align:center;color:#22c55e">${r.correct}</td>
+      <td style="padding:8px;text-align:center;color:#ef4444">${r.wrong}</td>
+      <td style="padding:8px;text-align:center"><span style="${ac}">${r.accuracy}%</span></td>
+    </tr>`;
+  });
+  h += '</tbody></table></div>';
+  dom.historyList.innerHTML = h;
+}
+dom.btnClearHistory.addEventListener('click', () => { if (confirm('确定清空所有练习记录吗？')) { state.practiceHistory = []; savePracticeHistory(); renderPracticeHistory(); } });
+
+// ==================== 键盘 ====================
+document.addEventListener('keydown', e => {
+  if (e.target === dom.dictationInput || e.target === dom.modalBookName || e.target === dom.modalFolderName) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  switch (e.key) {
+    case ' ': e.preventDefault(); if (dom.btnPlay.disabled) break; if (state.isPlaying) stopPlayback(); else startPlayback(); break;
+    case 'ArrowLeft': e.preventDefault(); if (state.currentIndex > 0) jumpToWord(state.currentIndex - 1); break;
+    case 'ArrowRight': e.preventDefault(); const w = currentWords(); if (state.currentIndex < w.length - 1) jumpToWord(state.currentIndex + 1); break;
+  }
+});
+
+// ==================== 初始化 ====================
+loadAll(); loadSettings(); loadPracticeHistory();
+renderBookTree(); renderWordList(); updatePlayUI(); populateDictationBookSelect();
+updateWrongBadge(); renderPracticeHistory();
+</script>
+</body>
+</html>
