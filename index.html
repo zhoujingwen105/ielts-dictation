@@ -293,6 +293,16 @@ input[type="range"]{width:120px}
       <div class="btn-group" style="justify-content:center">
         <button class="btn btn-outline btn-sm" id="btnDictationRestart">重新开始</button>
       </div>
+      <div id="dictationRedoWrong" style="display:none;margin-top:16px;padding:14px;background:#fff3cd;border-radius:10px;text-align:center">
+        <div style="font-weight:600;margin-bottom:10px;color:#856404">本次有 <span id="redoWrongCount">0</span> 个错词，是否重新听写？</div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:.82rem;color:#666;cursor:pointer;margin:0 6px"><input type="radio" name="redoMode" value="onebyone" checked> 逐个</label>
+          <label style="font-size:.82rem;color:#666;cursor:pointer;margin:0 6px"><input type="radio" name="redoMode" value="continuous"> 连续</label>
+          <label style="font-size:.82rem;color:#666;cursor:pointer;margin:0 6px"><input type="radio" name="redoMode" value="untilcorrect"> 纠错</label>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btnRedoWrong">重新听写错词</button>
+        <button class="btn btn-outline btn-sm" id="btnRedoDismiss" style="margin-left:8px">关闭</button>
+      </div>
     </div>
   </div>
 
@@ -434,7 +444,7 @@ const state = {
   // 听写
   dictationWords: [], dictationIndex: -1,
   dictationTotal: 0, dictationCorrect: 0, dictationWrong: 0,
-  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationBookName: '', dictationTimer: null, dictationAdvanceTimer: null, dictationPaused: false, _ttsKeepAlive: null,
+  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationBookName: '', dictationTimer: null, dictationAdvanceTimer: null, dictationPaused: false, _ttsKeepAlive: null, _sessionWrongWords: [],
   // 错词本: { [bookId]: { [word]: { correct, wrong, lastTime, translation } } }
   wrongWords: {},
   wrongBookCollapsed: {},
@@ -469,6 +479,8 @@ const dom = {
   statTotal: $('#statTotal'), statCorrect: $('#statCorrect'), statWrong: $('#statWrong'), statAccuracy: $('#statAccuracy'),
   dictationWordCount: $('#dictationWordCount'),
   btnDictationRestart: $('#btnDictationRestart'),
+  dictationRedoWrong: $('#dictationRedoWrong'), redoWrongCount: $('#redoWrongCount'),
+  btnRedoWrong: $('#btnRedoWrong'), btnRedoDismiss: $('#btnRedoDismiss'),
   wrongWordList: $('#wrongWordList'), wrongCount: $('#wrongCount'),
   btnDictateWrong: $('#btnDictateWrong'), btnExportWrong: $('#btnExportWrong'), btnClearWrong: $('#btnClearWrong'),
   historyList: $('#historyList'), btnClearHistory: $('#btnClearHistory'),
@@ -1191,6 +1203,7 @@ function getDictationWords() {
 }
 
 async function startDictation() {
+  dom.dictationRedoWrong.style.display = 'none';
   const { words, bookId, bookName } = getDictationWords();
   if (words.length === 0) { alert('所选单词本为空！'); return; }
   state.dictationBookName = bookName || '';
@@ -1203,6 +1216,7 @@ async function startDictation() {
 function initDictation(wordObjs, sourceBookId) {
   if (!wordObjs || wordObjs.length === 0) { const w = currentWords(); if (w.length === 0) { alert('当前单词本为空！'); return; } wordObjs = w; sourceBookId = state.currentBookId; }
   stopPlayback(); clearTimeout(state.dictationTimer); clearTimeout(state.dictationAdvanceTimer);
+  state._sessionWrongWords = [];
   state.dictationWords = wordObjs.map(w => ({ text: w.text || w, translation: w.translation || '', bookId: w.bookId || sourceBookId || state.currentBookId || '' }));
   state.dictationSourceBookId = sourceBookId || state.currentBookId || '';
   state.dictationIndex = -1; state.dictationTotal = 0; state.dictationCorrect = 0; state.dictationWrong = 0;
@@ -1272,6 +1286,13 @@ async function playDictationWord() {
       if (state.practiceHistory.length > 100) state.practiceHistory = state.practiceHistory.slice(0, 100);
       savePracticeHistory(); renderPracticeHistory();
     }
+    // Show redo wrong words panel
+    if (state._sessionWrongWords.length > 0) {
+      dom.redoWrongCount.textContent = state._sessionWrongWords.length;
+      dom.dictationRedoWrong.style.display = '';
+    } else {
+      dom.dictationRedoWrong.style.display = 'none';
+    }
     return;
   }
   state.dictationCurrentWord = wo; dom.btnDictationPlay.disabled = true;
@@ -1326,6 +1347,13 @@ function applyWordAnswer(wordObj, isCorrect) {
   else state.dictationWrong++;
   recordWordResult(wordObj, isCorrect);
   updateDictationStats();
+  // Track session wrong words for redo
+  if (!isCorrect) {
+    const key = wordObj.text.toLowerCase();
+    if (!state._sessionWrongWords.find(w => w.text.toLowerCase() === key)) {
+      state._sessionWrongWords.push({ text: wordObj.text, translation: wordObj.translation || '' });
+    }
+  }
 }
 
 function checkDictationAnswer() {
@@ -1443,7 +1471,25 @@ dom.btnDictationPause.addEventListener('click', async () => {
   }
 });
 dom.dictationInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); checkDictationAnswer(); } });
-dom.btnDictationRestart.addEventListener('click', startDictation);
+dom.btnDictationRestart.addEventListener('click', () => { dom.dictationRedoWrong.style.display = 'none'; startDictation(); });
+
+dom.btnRedoWrong.addEventListener('click', async () => {
+  const words = [...state._sessionWrongWords];
+  if (words.length === 0) return;
+  const redoMode = document.querySelector('input[name="redoMode"]:checked').value;
+  document.querySelector(`input[name="dictationMode"][value="${redoMode}"]`).checked = true;
+  dom.dictationRedoWrong.style.display = 'none';
+  state.dictationBookName = (state.dictationBookName || '') + ' 错词';
+  initDictation(words, state.dictationSourceBookId || '');
+  startTtsKeepAlive();
+  await sleep(80);
+  playDictationWord();
+});
+
+dom.btnRedoDismiss.addEventListener('click', () => {
+  dom.dictationRedoWrong.style.display = 'none';
+});
+
 function updateDictationWordCountPreview() {
   const { words } = getDictationWords();
   dom.dictationWordCount.textContent = `共 ${words.length} 个单词`;
