@@ -432,6 +432,7 @@ const state = {
   dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationTimer: null, dictationPaused: false,
   // 错词本: { [bookId]: { [word]: { correct, wrong, lastTime, translation } } }
   wrongWords: {},
+  wrongBookCollapsed: {},
   practiceHistory: [],
   playedIndices: new Set(), randomQueue: [],
   modalCallback: null, folderModalCallback: null,
@@ -1119,10 +1120,11 @@ function getDictationWords() {
   return { words: currentWords(), bookId: state.currentBookId };
 }
 
-function startDictation() {
+async function startDictation() {
   const { words, bookId } = getDictationWords();
   if (words.length === 0) { alert('所选单词本为空！'); return; }
   initDictation(words, bookId);
+  await sleep(80);
   playDictationWord();
 }
 
@@ -1155,10 +1157,10 @@ function isContinuousMode() { return document.querySelector('input[name="dictati
 
 function autoSkipCurrentWord() {
   if (!state.dictationEnabled || state.dictationPaused || !state.dictationCurrentWord) return;
-  const c = state.dictationCurrentWord; state.dictationTotal++; state.dictationWrong++;
-  recordWordResult(c, false); updateDictationStats();
+  applyWordAnswer(state.dictationCurrentWord, false);
   dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
   dom.dictationInput.disabled = true;
+  const c = state.dictationCurrentWord;
   const th = c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
   dom.resultFeedback.innerHTML = `⏰ 时间到！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong';
   state.dictationTimer = setTimeout(() => { dom.dictationInput.disabled = false; playDictationWord(); }, 1500);
@@ -1167,6 +1169,9 @@ function autoSkipCurrentWord() {
 async function playDictationWord() {
   if (!state.dictationEnabled || state.dictationPaused) return;
   clearTimeout(state.dictationTimer);
+  speechSynthesis.cancel();
+  await sleep(80);
+  if (!state.dictationEnabled || state.dictationPaused) return;
   const wo = getNextDictationWord();
   if (!wo) {
     dom.resultFeedback.innerHTML = '全部单词已完成！'; dom.resultFeedback.className = 'result-feedback correct';
@@ -1209,17 +1214,46 @@ function recordWordResult(wordObj, isCorrect) {
   saveWrongWords();
 }
 
+function undoWordResult(wordObj, wasCorrect) {
+  const bid = wordObj.bookId || state.dictationSourceBookId || '__global__';
+  const key = wordObj.text.toLowerCase();
+  if (!state.wrongWords[bid] || !state.wrongWords[bid][key]) return;
+  const r = state.wrongWords[bid][key];
+  if (wasCorrect) r.correct--; else r.wrong--;
+  if (r.correct <= 0 && r.wrong <= 0) {
+    delete state.wrongWords[bid][key];
+    if (Object.keys(state.wrongWords[bid]).length === 0) delete state.wrongWords[bid];
+  }
+  saveWrongWords();
+}
+
+function applyWordAnswer(wordObj, isCorrect) {
+  // Undo previous answer if re-answering the same word
+  if (wordObj._answered !== undefined) {
+    state.dictationTotal--;
+    if (wordObj._wasCorrect) state.dictationCorrect--;
+    else state.dictationWrong--;
+    undoWordResult(wordObj, wordObj._wasCorrect);
+  }
+  wordObj._answered = true;
+  wordObj._wasCorrect = isCorrect;
+  state.dictationTotal++;
+  if (isCorrect) state.dictationCorrect++;
+  else state.dictationWrong++;
+  recordWordResult(wordObj, isCorrect);
+  updateDictationStats();
+}
+
 function checkDictationAnswer() {
   const ua = dom.dictationInput.value.trim();
   if (!ua || !state.dictationCurrentWord) return;
   clearTimeout(state.dictationTimer);
-  const c = state.dictationCurrentWord; state.dictationTotal++;
+  const c = state.dictationCurrentWord;
   const isC = ua.toLowerCase() === c.text.toLowerCase();
+  applyWordAnswer(c, isC);
   const th = c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
-  recordWordResult(c, isC);
-  if (isC) { state.dictationCorrect++; dom.dictationInput.className = 'dictation-input correct'; dom.resultFeedback.innerHTML = `✓ 正确！${th}`; dom.resultFeedback.className = 'result-feedback correct'; }
-  else { state.dictationWrong++; dom.dictationInput.className = 'dictation-input wrong'; dom.resultFeedback.innerHTML = `✗ 错误！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong'; }
-  updateDictationStats();
+  if (isC) { dom.dictationInput.className = 'dictation-input correct'; dom.resultFeedback.innerHTML = `✓ 正确！${th}`; dom.resultFeedback.className = 'result-feedback correct'; }
+  else { dom.dictationInput.className = 'dictation-input wrong'; dom.resultFeedback.innerHTML = `✗ 错误！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong'; }
   if (isContinuousMode()) { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
   else { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1800); }
 }
@@ -1235,16 +1269,29 @@ dom.btnDictationRepeat.addEventListener('click', () => { if (state.dictationCurr
 dom.btnDictationSkip.addEventListener('click', () => {
   if (!state.dictationEnabled) return;
   clearTimeout(state.dictationTimer);
-  const c = state.dictationCurrentWord; state.dictationTotal++; state.dictationWrong++; recordWordResult(c, false);
-  updateDictationStats(); dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
-  const th = c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
-  dom.resultFeedback.innerHTML = `已跳过，正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong';
+  const c = state.dictationCurrentWord;
+  if (c) applyWordAnswer(c, false);
+  dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
+  const th = c && c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
+  dom.resultFeedback.innerHTML = c ? `已跳过，正确拼写：<b>${c.text}</b>${th}` : '';
+  dom.resultFeedback.className = 'result-feedback wrong';
   if (isContinuousMode()) { playDictationWord(); }
   else { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
 });
 dom.btnDictationPrev.addEventListener('click', () => {
   if (!state.dictationEnabled || state.dictationPaused || state.dictationIndex <= 0) return;
   clearTimeout(state.dictationTimer);
+  // Undo current word's answer so it can be re-answered later
+  const c = state.dictationCurrentWord;
+  if (c && c._answered !== undefined) {
+    state.dictationTotal--;
+    if (c._wasCorrect) state.dictationCorrect--;
+    else state.dictationWrong--;
+    undoWordResult(c, c._wasCorrect);
+    delete c._answered;
+    delete c._wasCorrect;
+    updateDictationStats();
+  }
   state.dictationIndex -= 2;
   dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
   dom.resultFeedback.textContent = ''; dom.resultFeedback.className = 'result-feedback';
@@ -1254,7 +1301,7 @@ dom.btnDictationNext.addEventListener('click', () => {
   if (!state.dictationEnabled || state.dictationPaused) return;
   clearTimeout(state.dictationTimer);
   const c = state.dictationCurrentWord;
-  if (c) { state.dictationTotal++; state.dictationWrong++; recordWordResult(c, false); updateDictationStats(); }
+  if (c) applyWordAnswer(c, false);
   dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
   const th = c && c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
   dom.resultFeedback.innerHTML = c ? `已跳过，正确拼写：<b>${c.text}</b>${th}` : '';
@@ -1306,7 +1353,8 @@ function renderWrongWords() {
     const bn = book ? book.name : (bid === '__global__' ? '全局' : '未知');
     const es = Object.entries(state.wrongWords[bid]).filter(e => e[1].wrong > 0).sort((a, b) => b[1].wrong - a[1].wrong);
     if (es.length === 0) return;
-    h += `<div class="wrong-book-section"><div class="wrong-book-header" data-bid="${bid}" data-action="toggleWrong">📖 ${bn}（${es.length} 个错词） <span class="wrong-toggle-icon" style="font-size:.75rem;color:#aaa">▸</span></div><div class="wrong-book-body" data-bid="${bid}">`;
+    const collapsed = state.wrongBookCollapsed[bid];
+    h += `<div class="wrong-book-section"><div class="wrong-book-header" data-bid="${bid}" data-action="toggleWrong">📖 ${bn}（${es.length} 个错词） <span class="wrong-toggle-icon${collapsed ? ' rotated' : ''}" style="font-size:.75rem;color:#aaa">▸</span><span style="margin-left:auto;display:flex;gap:4px"><button class="btn btn-success btn-xs" data-bid="${bid}" data-action="dictateBookWrong">听写</button></span></div><div class="wrong-book-body${collapsed ? ' collapsed' : ''}" data-bid="${bid}">`;
     es.forEach(([word, info]) => {
       const tr = info.translation ? `<div class="wrong-word-trans">${info.translation}</div>` : '';
       h += `<div class="wrong-word-item">
@@ -1325,12 +1373,41 @@ function renderWrongWords() {
     if (state.wrongWords[bid]) { delete state.wrongWords[bid][w]; if (Object.keys(state.wrongWords[bid]).length === 0) delete state.wrongWords[bid]; }
     saveWrongWords(); renderWrongWords();
   }));
-  dom.wrongWordList.querySelectorAll('[data-action="toggleWrong"]').forEach(hdr => hdr.addEventListener('click', () => {
+  dom.wrongWordList.querySelectorAll('[data-action="toggleWrong"]').forEach(hdr => hdr.addEventListener('click', (e) => {
+    if (e.target.tagName === 'BUTTON') return;
     const bid = hdr.dataset.bid;
     const body = dom.wrongWordList.querySelector(`.wrong-book-body[data-bid="${bid}"]`);
     const icon = hdr.querySelector('.wrong-toggle-icon');
-    if (body) { body.classList.toggle('collapsed'); icon.classList.toggle('rotated'); }
+    if (body) {
+      body.classList.toggle('collapsed');
+      icon.classList.toggle('rotated');
+      state.wrongBookCollapsed[bid] = body.classList.contains('collapsed');
+    }
   }));
+  dom.wrongWordList.querySelectorAll('[data-action="dictateBookWrong"]').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const bid = btn.dataset.bid;
+    const minCount = parseInt(dom.wrongMinCount2.value) || 1;
+    const aw = [];
+    if (state.wrongWords[bid]) {
+      Object.entries(state.wrongWords[bid]).forEach(([w, info]) => {
+        if (info.wrong >= minCount) aw.push({ text: w, translation: info.translation || '', bookId: bid });
+      });
+    }
+    if (aw.length === 0) { alert('该单词本没有符合条件的错词！'); return; }
+    switchToDictationTab();
+    dom.dictationBookSelect.value = '__wrong__';
+    dom.wrongMinCount.value = minCount;
+    initDictation(aw, bid);
+    playDictationWord();
+  }));
+}
+
+function switchToDictationTab() {
+  dom.tabs.forEach(t => t.classList.remove('active'));
+  const dt = $$('.tab[data-tab="dictation"]')[0]; if (dt) dt.classList.add('active');
+  dom.panels.forEach(p => p.classList.remove('active'));
+  const dp = $('#panel-dictation'); if (dp) dp.classList.add('active');
 }
 
 dom.btnDictateWrong.addEventListener('click', () => {
@@ -1338,8 +1415,7 @@ dom.btnDictateWrong.addEventListener('click', () => {
   const aw = []; const seen = new Set();
   Object.entries(state.wrongWords).forEach(([bid, words]) => { Object.entries(words).forEach(([w, info]) => { if (!seen.has(w) && info.wrong >= minCount) { seen.add(w); aw.push({ text: w, translation: info.translation || '', bookId: bid }); } }); });
   if (aw.length === 0) { alert('错词本为空！'); return; }
-  dom.tabs.forEach(t => t.classList.remove('active')); const dt = $$('.tab[data-tab="dictation"]')[0]; if (dt) dt.classList.add('active');
-  dom.panels.forEach(p => p.classList.remove('active')); const dp = $('#panel-dictation'); if (dp) dp.classList.add('active');
+  switchToDictationTab();
   dom.dictationBookSelect.value = '__wrong__';
   dom.wrongMinCount.value = minCount;
   startDictation();
@@ -1363,21 +1439,41 @@ dom.btnClearWrong.addEventListener('click', () => { if (confirm('确定清空所
 // ==================== 练习记录 ====================
 function renderPracticeHistory() {
   if (state.practiceHistory.length === 0) { dom.historyList.innerHTML = '<div class="empty-state"><div class="icon">📋</div>暂无练习记录</div>'; return; }
-  let h = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem"><thead><tr style="border-bottom:2px solid #eee">';
-  h += '<th style="padding:8px;text-align:left">时间</th><th style="padding:8px;text-align:left">单词本</th><th style="padding:8px;text-align:center">总计</th><th style="padding:8px;text-align:center">正确</th><th style="padding:8px;text-align:center">错误</th><th style="padding:8px;text-align:center">正确率</th>';
-  h += '</tr></thead><tbody>';
+  // Group by book name
+  const groups = {};
   state.practiceHistory.forEach(r => {
-    const ac = r.accuracy >= 80 ? 'color:#22c55e;font-weight:700' : r.accuracy >= 50 ? 'color:#f59e0b;font-weight:700' : 'color:#ef4444;font-weight:700';
-    h += `<tr style="border-bottom:1px solid #f0f0f0">
-      <td style="padding:8px;color:#888;white-space:nowrap">${r.date}</td>
-      <td style="padding:8px">${r.bookName}</td>
-      <td style="padding:8px;text-align:center">${r.total}</td>
-      <td style="padding:8px;text-align:center;color:#22c55e">${r.correct}</td>
-      <td style="padding:8px;text-align:center;color:#ef4444">${r.wrong}</td>
-      <td style="padding:8px;text-align:center"><span style="${ac}">${r.accuracy}%</span></td>
-    </tr>`;
+    if (!groups[r.bookName]) groups[r.bookName] = [];
+    groups[r.bookName].push(r);
   });
-  h += '</tbody></table></div>';
+  // Sort groups by most recent session
+  const sortedGroups = Object.entries(groups).sort((a, b) => {
+    const aLatest = a[1].reduce((max, r) => r.date > max ? r.date : max, '');
+    const bLatest = b[1].reduce((max, r) => r.date > max ? r.date : max, '');
+    return bLatest.localeCompare(aLatest);
+  });
+  let h = '';
+  sortedGroups.forEach(([bookName, records]) => {
+    records.sort((a, b) => b.date.localeCompare(a.date));
+    const avgAcc = Math.round(records.reduce((s, r) => s + r.accuracy, 0) / records.length);
+    const totalSessions = records.length;
+    const latest = records[0].date;
+    const accColor = avgAcc >= 80 ? 'color:#22c55e' : avgAcc >= 50 ? 'color:#f59e0b' : 'color:#ef4444';
+    h += `<div class="wrong-book-section"><div class="wrong-book-header" style="cursor:default">📖 ${bookName} <span style="font-weight:400;font-size:.8rem;color:#888">（${totalSessions}次练习 | 平均正确率 <strong style="${accColor}">${avgAcc}%</strong> | 最近：${latest}）</span></div>`;
+    h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr style="border-bottom:2px solid #eee">';
+    h += '<th style="padding:6px 8px;text-align:left">时间</th><th style="padding:6px 8px;text-align:center">总计</th><th style="padding:6px 8px;text-align:center">正确</th><th style="padding:6px 8px;text-align:center">错误</th><th style="padding:6px 8px;text-align:center">正确率</th>';
+    h += '</tr></thead><tbody>';
+    records.forEach(r => {
+      const ac = r.accuracy >= 80 ? 'color:#22c55e;font-weight:700' : r.accuracy >= 50 ? 'color:#f59e0b;font-weight:700' : 'color:#ef4444;font-weight:700';
+      h += `<tr style="border-bottom:1px solid #f0f0f0">
+        <td style="padding:6px 8px;color:#888;white-space:nowrap">${r.date}</td>
+        <td style="padding:6px 8px;text-align:center">${r.total}</td>
+        <td style="padding:6px 8px;text-align:center;color:#22c55e">${r.correct}</td>
+        <td style="padding:6px 8px;text-align:center;color:#ef4444">${r.wrong}</td>
+        <td style="padding:6px 8px;text-align:center"><span style="${ac}">${r.accuracy}%</span></td>
+      </tr>`;
+    });
+    h += '</tbody></table></div></div>';
+  });
   dom.historyList.innerHTML = h;
 }
 dom.btnClearHistory.addEventListener('click', () => { if (confirm('确定清空所有练习记录吗？')) { state.practiceHistory = []; savePracticeHistory(); renderPracticeHistory(); } });
