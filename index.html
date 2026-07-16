@@ -316,10 +316,7 @@ input[type="range"]{width:120px}
       <div class="card-title">语音设置</div>
       <div class="setting-row">
         <span class="setting-label">TTS 引擎</span>
-        <select id="ttsEngine">
-          <option value="web-speech">浏览器内置语音（免联网）</option>
-          <option value="google">Google TTS（需翻墙，更自然）</option>
-        </select>
+        <span style="font-size:.8rem;color:#888">使用浏览器内置语音（Chrome 自带 Google 神经网络语音，质量最佳）</span>
       </div>
       <div class="setting-row">
         <span class="setting-label">语音测试</span>
@@ -427,7 +424,7 @@ const state = {
   isPlaying: false,
   playMode: 'sequential',
   rate: 0.85, pitch: 1, interval: 1500, repeatCount: 1,
-  ttsEngine: 'web-speech',
+  ttsEngine: 'web-speech', // 仅保留兼容，已统一使用 Web Speech API
   selectedVoice: null, voices: [],
   // 听写
   dictationWords: [], dictationIndex: -1,
@@ -468,7 +465,7 @@ const dom = {
   btnDictateWrong: $('#btnDictateWrong'), btnExportWrong: $('#btnExportWrong'), btnClearWrong: $('#btnClearWrong'),
   historyList: $('#historyList'), btnClearHistory: $('#btnClearHistory'),
   wrongMinCount: $('#wrongMinCount'), wrongMinCount2: $('#wrongMinCount2'),
-  ttsEngine: $('#ttsEngine'), btnTestVoice: $('#btnTestVoice'),
+  btnTestVoice: $('#btnTestVoice'),
   btnExportData: $('#btnExportData'), btnImportData: $('#btnImportData'), importDataFile: $('#importDataFile'),
   rateSlider: $('#rateSlider'), rateValue: $('#rateValue'),
   pitchSlider: $('#pitchSlider'), pitchValue: $('#pitchValue'),
@@ -958,30 +955,19 @@ function speakWordWebSpeech(word) {
     speechSynthesis.speak(u);
   });
 }
-function speakWordGoogle(word) {
-  return new Promise((resolve) => {
-    const audio = new Audio();
-    audio.src = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(word)}&tl=en-GB`;
-    let resolved = false, fallenBack = false;
-    const done = () => { if (!resolved) { resolved = true; resolve(); } };
-    const fallback = () => { if (fallenBack) return; fallenBack = true; audio.pause(); audio.removeAttribute('src'); speakWordWebSpeech(word).then(done); };
-    audio.onended = done;
-    audio.onerror = fallback;
-    audio.play().catch(fallback);
-    setTimeout(() => { if (!resolved) fallback(); }, 5000);
-  });
-}
 function speakWord(word) {
   const clean = word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '').trim();
-  return state.ttsEngine === 'google' ? speakWordGoogle(clean) : speakWordWebSpeech(clean);
+  return speakWordWebSpeech(clean);
 }
 
 // ==================== 语音选择 ====================
 function scoreVoice(voice) {
   let s = 0;
   const n = voice.name.toLowerCase();
-  if (/neural|natural|premium|enhanced|wavenet/.test(n)) s += 5;
-  if (/samantha|google|ava|allison|zoe|microsoft|amazon/.test(n)) s += 3;
+  if (/google.*neural|google.*enhanced|google.*wavenet/.test(n)) s += 10;
+  else if (/neural|natural|premium|enhanced|wavenet/.test(n)) s += 5;
+  if (/google/.test(n)) s += 5;
+  if (/samantha|ava|allison|zoe|microsoft|amazon/.test(n)) s += 3;
   if (voice.localService) s += 2;
   if (voice.lang.toLowerCase().startsWith('en-gb')) s += 2;
   else if (voice.lang.toLowerCase().startsWith('en-us')) s += 1;
@@ -1012,13 +998,12 @@ function loadSettings() {
     if (s.pitch != null) { state.pitch = s.pitch; dom.pitchSlider.value = s.pitch; dom.pitchValue.textContent = s.pitch; }
     if (s.interval) { state.interval = s.interval; dom.intervalSelect.value = s.interval / 1000; }
     if (s.repeatCount) { state.repeatCount = s.repeatCount; dom.repeatSelect.value = s.repeatCount; }
-    if (s.ttsEngine) { state.ttsEngine = s.ttsEngine; dom.ttsEngine.value = s.ttsEngine; }
+    if (s.ttsEngine) state.ttsEngine = s.ttsEngine;
     state.wrongWords = JSON.parse(localStorage.getItem('ielts_wrongwords') || '{}');
   } catch(e) { state.wrongWords = {}; }
 }
-function saveSettings() { localStorage.setItem('ielts_settings', JSON.stringify({ rate: state.rate, pitch: state.pitch, interval: state.interval, repeatCount: state.repeatCount, ttsEngine: state.ttsEngine })); }
+function saveSettings() { localStorage.setItem('ielts_settings', JSON.stringify({ rate: state.rate, pitch: state.pitch, interval: state.interval, repeatCount: state.repeatCount })); }
 
-dom.ttsEngine.addEventListener('change', () => { state.ttsEngine = dom.ttsEngine.value; saveSettings(); });
 dom.btnTestVoice.addEventListener('click', () => { speakWord('hello'); });
 dom.rateSlider.addEventListener('input', () => { state.rate = +dom.rateSlider.value; dom.rateValue.textContent = state.rate + 'x'; saveSettings(); });
 dom.pitchSlider.addEventListener('input', () => { state.pitch = +dom.pitchSlider.value; dom.pitchValue.textContent = state.pitch; saveSettings(); });
@@ -1404,7 +1389,7 @@ dom.btnExportData.addEventListener('click', () => {
     currentBookId: state.currentBookId,
     wrongWords: state.wrongWords,
     practiceHistory: state.practiceHistory,
-    settings: { rate: state.rate, pitch: state.pitch, interval: state.interval, repeatCount: state.repeatCount, ttsEngine: state.ttsEngine },
+    settings: { rate: state.rate, pitch: state.pitch, interval: state.interval, repeatCount: state.repeatCount },
     exportedAt: new Date().toISOString()
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
