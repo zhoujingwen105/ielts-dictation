@@ -338,7 +338,7 @@ input[type="range"]{width:120px}
         <span class="range-value" id="pitchValue">1.0</span>
       </div>
       <div class="setting-row">
-        <span class="setting-label">单词间隔</span>
+        <span class="setting-label">朗读间隔（播放模式）</span>
         <select id="intervalSelect">
           <option value="1">1 秒</option>
           <option value="1.5" selected>1.5 秒</option>
@@ -1216,6 +1216,10 @@ function getNextDictationWord() { if (state.dictationIndex >= state.dictationWor
 function isContinuousMode() { return document.querySelector('input[name="dictationMode"]:checked').value === 'continuous'; }
 function isUntilCorrectMode() { return document.querySelector('input[name="dictationMode"]:checked').value === 'untilcorrect'; }
 
+function getDictationTimeout(word) {
+  return Math.max(3000, Math.min(15000, word.length * 400 + 1500));
+}
+
 function autoSkipCurrentWord() {
   if (!state.dictationEnabled || state.dictationPaused || !state.dictationCurrentWord) return;
   applyWordAnswer(state.dictationCurrentWord, false);
@@ -1263,7 +1267,7 @@ async function playDictationWord() {
   await speakWord(wo.text);
   if (state.dictationPaused) return;
   dom.dictationInput.disabled = false; dom.dictationInput.focus();
-  if (isContinuousMode()) state.dictationTimer = setTimeout(autoSkipCurrentWord, state.interval);
+  if (isContinuousMode()) state.dictationTimer = setTimeout(autoSkipCurrentWord, getDictationTimeout(wo.text));
 }
 
 function recordWordResult(wordObj, isCorrect) {
@@ -1414,7 +1418,7 @@ dom.btnDictationPause.addEventListener('click', async () => {
     dom.dictationInput.focus();
     await speakWord(state.dictationCurrentWord.text);
     if (state.dictationPaused) return;
-    if (isContinuousMode()) state.dictationTimer = setTimeout(autoSkipCurrentWord, state.interval);
+    if (isContinuousMode()) state.dictationTimer = setTimeout(autoSkipCurrentWord, getDictationTimeout(state.dictationCurrentWord.text));
   } else {
     state.dictationPaused = true;
     speechSynthesis.cancel();
