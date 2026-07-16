@@ -1540,11 +1540,11 @@ dom.btnExportWrong.addEventListener('click', () => {
 dom.btnClearWrong.addEventListener('click', () => { if (confirm('确定清空所有错词记录吗？')) { state.wrongWords = {}; saveWrongWords(); renderWrongWords(); } });
 
 // ==================== 练习记录 ====================
-function renderHistoryTable(records, showEdit) {
+function renderHistoryTable(records, showEdit, sectionType) {
   if (records.length === 0) return '<div style="color:#bbb;font-size:.8rem;padding:8px 0">暂无记录</div>';
   let h = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr style="border-bottom:2px solid #eee">';
   h += '<th style="padding:6px 8px;text-align:left">时间</th><th style="padding:6px 8px;text-align:center">总计</th><th style="padding:6px 8px;text-align:center">正确</th><th style="padding:6px 8px;text-align:center">错误</th><th style="padding:6px 8px;text-align:center">正确率</th>';
-  if (showEdit) h += '<th style="padding:6px 8px;text-align:center"></th>';
+  if (showEdit) h += '<th style="padding:6px 8px;text-align:center;white-space:nowrap"></th>';
   h += '</tr></thead><tbody>';
   records.forEach(r => {
     const ac = r.accuracy >= 80 ? 'color:#22c55e;font-weight:700' : r.accuracy >= 50 ? 'color:#f59e0b;font-weight:700' : 'color:#ef4444;font-weight:700';
@@ -1554,7 +1554,11 @@ function renderHistoryTable(records, showEdit) {
       <td style="padding:6px 8px;text-align:center;color:#22c55e">${r.correct}</td>
       <td style="padding:6px 8px;text-align:center;color:#ef4444">${r.wrong}</td>
       <td style="padding:6px 8px;text-align:center"><span style="${ac}">${r.accuracy}%</span></td>`;
-    if (showEdit) h += `<td style="padding:6px 8px;text-align:center"><button class="btn btn-outline btn-xs" data-action="editHistory" data-id="${r.id}" title="修改归属">✎</button></td>`;
+    if (showEdit) {
+      const moveLabel = sectionType === 'all' ? '→错词' : '→全部';
+      const moveTo = sectionType === 'all' ? 'wrong' : 'all';
+      h += `<td style="padding:4px 6px;text-align:center;white-space:nowrap"><button class="btn btn-outline btn-xs" data-action="moveHistory" data-id="${r.id}" data-to="${moveTo}" title="移到${sectionType === 'all' ? '错词练习' : '全部练习'}" style="font-size:.7rem">${moveLabel}</button> <button class="btn btn-outline btn-xs" data-action="editHistory" data-id="${r.id}" title="修改归属" style="font-size:.7rem">✎</button></td>`;
+    }
     h += '</tr>';
   });
   h += '</tbody></table></div>';
@@ -1601,13 +1605,13 @@ function renderPracticeHistory() {
     // 全部练习 sub-section
     h += `<div class="wrong-book-header" data-action="toggleHistorySub" data-key="${key}__all" style="font-size:.85rem;padding-left:12px">📋 全部练习（${group.all.length}次） <span class="wrong-toggle-icon${allCollapsed ? ' rotated' : ''}" style="font-size:.7rem;color:#aaa">▸</span></div>`;
     h += `<div class="wrong-book-body${allCollapsed ? ' collapsed' : ''}" data-history-sub="${key}__all" style="padding-left:8px">`;
-    h += renderHistoryTable(group.all, true);
+    h += renderHistoryTable(group.all, true, 'all');
     h += '</div>';
 
     // 错词练习 sub-section
     h += `<div class="wrong-book-header" data-action="toggleHistorySub" data-key="${key}__wrong" style="font-size:.85rem;padding-left:12px">📝 错词练习（${group.wrong.length}次） <span class="wrong-toggle-icon${wrongCollapsed ? ' rotated' : ''}" style="font-size:.7rem;color:#aaa">▸</span></div>`;
     h += `<div class="wrong-book-body${wrongCollapsed ? ' collapsed' : ''}" data-history-sub="${key}__wrong" style="padding-left:8px">`;
-    h += renderHistoryTable(group.wrong, true);
+    h += renderHistoryTable(group.wrong, true, 'wrong');
     h += '</div>';
 
     h += '</div></div>';
@@ -1638,15 +1642,35 @@ function renderPracticeHistory() {
       }
     });
   });
+  // Bind move buttons
+  dom.historyList.querySelectorAll('[data-action="moveHistory"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const to = btn.dataset.to;
+      const record = state.practiceHistory.find(r => r.id === id);
+      if (!record) return;
+      if (to === 'wrong') {
+        record.bookName = record.bookName.replace(/ 错词$/, '') + ' 错词';
+      } else {
+        record.bookName = record.bookName.replace(/ 错词$/, '');
+      }
+      savePracticeHistory();
+      renderPracticeHistory();
+    });
+  });
   // Bind edit buttons
   dom.historyList.querySelectorAll('[data-action="editHistory"]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
       const record = state.practiceHistory.find(r => r.id === id);
       if (!record) return;
-      const newName = prompt('修改练习记录归属（输入单词本名称）', record.bookName);
+      const newName = prompt('修改归属：输入单词本名称，加" 错词"后缀可归入错词练习', record.bookName);
       if (newName !== null && newName.trim()) {
         record.bookName = newName.trim();
+        // Resolve bookId from name
+        const baseName = record.bookName.replace(/ 错词$/, '');
+        const matchedBook = state.wordBooks.find(b => b.name === baseName);
+        record.bookId = matchedBook ? matchedBook.id : (record.bookId || '');
         savePracticeHistory();
         renderPracticeHistory();
       }
