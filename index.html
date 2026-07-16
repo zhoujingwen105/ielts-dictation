@@ -964,10 +964,11 @@ function speakWordGoogle(word) {
     audio.src = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(word)}&tl=en-GB`;
     let resolved = false;
     const done = () => { if (!resolved) { resolved = true; resolve(); } };
+    const fallback = () => { audio.pause(); audio.removeAttribute('src'); audio.load(); speakWordWebSpeech(word).then(done); };
     audio.onended = done;
-    audio.onerror = () => { speakWordWebSpeech(word).then(done); };
-    audio.play().catch(() => { speakWordWebSpeech(word).then(done); });
-    setTimeout(() => { if (!resolved) { audio.pause(); audio.src = ''; speakWordWebSpeech(word).then(done); } }, 5000);
+    audio.onerror = fallback;
+    audio.play().catch(fallback);
+    setTimeout(() => { if (!resolved) fallback(); }, 4000);
   });
 }
 function speakWord(word) {
