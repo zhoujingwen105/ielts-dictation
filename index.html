@@ -962,14 +962,13 @@ function speakWordGoogle(word) {
   return new Promise((resolve) => {
     const audio = new Audio();
     audio.src = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(word)}&tl=en-GB`;
-    let resolved = false;
+    let resolved = false, fallenBack = false;
     const done = () => { if (!resolved) { resolved = true; resolve(); } };
-    const cleanup = () => { audio.onended = null; audio.onerror = null; audio.pause(); audio.removeAttribute('src'); };
-    const fallback = () => { cleanup(); speakWordWebSpeech(word).then(done); };
+    const fallback = () => { if (fallenBack) return; fallenBack = true; audio.pause(); audio.removeAttribute('src'); speakWordWebSpeech(word).then(done); };
     audio.onended = done;
     audio.onerror = fallback;
     audio.play().catch(fallback);
-    setTimeout(() => { if (!resolved) fallback(); }, 4000);
+    setTimeout(() => { if (!resolved) fallback(); }, 5000);
   });
 }
 function speakWord(word) {
