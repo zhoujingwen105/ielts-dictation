@@ -10,12 +10,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:20px;text-align:center}
 .header h1{font-size:1.5rem;font-weight:600}
 .header p{font-size:.85rem;opacity:.85;margin-top:4px}
-.login-bar{display:flex;align-items:center;justify-content:flex-end;max-width:780px;margin:0 auto;padding:8px 16px 0 16px;gap:8px}
-.login-bar .user-info{font-size:.8rem;color:#888;display:flex;align-items:center;gap:6px}
-.login-bar .user-avatar{width:24px;height:24px;border-radius:50%}
-.login-bar .btn-login{font-size:.75rem;padding:5px 12px;border-radius:4px;border:1px solid #ddd;background:#fff;color:#555;cursor:pointer}
-.login-bar .btn-login:hover{background:#f5f5f5}
-.login-bar .sync-status{font-size:.7rem;color:#22c55e}
 .container{max-width:780px;margin:0 auto;padding:16px}
 
 .tabs{display:flex;background:#fff;border-radius:10px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -185,13 +179,6 @@ input[type="range"]{width:120px}
 <div class="header">
   <h1>雅思听力单词听写</h1>
   <p>粘贴单词，逐词朗读，听写自测</p>
-</div>
-
-<div class="login-bar">
-  <span class="sync-status" id="syncStatus"></span>
-  <span class="user-info" id="userInfo"></span>
-  <button class="btn-login" id="btnLogin" style="display:none">Google 登录</button>
-  <button class="btn-login" id="btnLogout" style="display:none">退出</button>
 </div>
 
 <div class="container">
@@ -431,42 +418,6 @@ input[type="range"]{width:120px}
 </div>
 
 <script>
-// ==================== Firebase 初始化（异步加载，不阻塞页面） ====================
-// TODO: 替换为你的 Firebase 配置（从 Firebase Console → 项目设置 → Web 应用 获取）
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-
-let db = null, firebaseReady = false;
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src; s.onload = resolve; s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
-
-async function initFirebase() {
-  try {
-    await Promise.all([
-      loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js'),
-      loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js'),
-      loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js')
-    ]);
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-    firebaseReady = true;
-    setupFirebaseAuth();
-  } catch(e) { console.warn('Firebase 不可用，使用本地模式', e); }
-}
-
 // ==================== 全局状态 ====================
 const state = {
   folders: [],              // [{id, name, createdAt}]
@@ -519,7 +470,6 @@ const dom = {
   wrongMinCount: $('#wrongMinCount'), wrongMinCount2: $('#wrongMinCount2'),
   ttsEngine: $('#ttsEngine'), btnTestVoice: $('#btnTestVoice'),
   btnExportData: $('#btnExportData'), btnImportData: $('#btnImportData'), importDataFile: $('#importDataFile'),
-  btnLogin: $('#btnLogin'), btnLogout: $('#btnLogout'), userInfo: $('#userInfo'), syncStatus: $('#syncStatus'),
   rateSlider: $('#rateSlider'), rateValue: $('#rateValue'),
   pitchSlider: $('#pitchSlider'), pitchValue: $('#pitchValue'),
   intervalSelect: $('#intervalSelect'), repeatSelect: $('#repeatSelect'), voiceSelect: $('#voiceSelect'),
@@ -1497,104 +1447,6 @@ dom.importDataFile.addEventListener('change', () => {
   dom.importDataFile.value = '';
 });
 
-// ==================== Firebase 认证与同步 ====================
-let currentUser = null;
-
-function setupFirebaseAuth() {
-  if (!firebaseReady) return;
-
-function saveToCloud() {
-  if (!firebaseReady || !db || !currentUser) return;
-  const data = {
-    folders: state.folders,
-    wordBooks: state.wordBooks,
-    currentBookId: state.currentBookId,
-    wrongWords: state.wrongWords,
-    practiceHistory: state.practiceHistory,
-    settings: { rate: state.rate, pitch: state.pitch, interval: state.interval, repeatCount: state.repeatCount, ttsEngine: state.ttsEngine },
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  db.collection('users').doc(currentUser.uid).set(data, { merge: true }).then(() => {
-    dom.syncStatus.textContent = '已同步';
-    setTimeout(() => { if (dom.syncStatus.textContent === '已同步') dom.syncStatus.textContent = ''; }, 2000);
-  }).catch(() => { dom.syncStatus.textContent = '同步失败'; });
-}
-
-async function loadFromCloud() {
-  if (!firebaseReady || !db || !currentUser) return false;
-  try {
-    const doc = await db.collection('users').doc(currentUser.uid).get();
-    if (!doc.exists) return false;
-    const data = doc.data();
-    if (data.wordBooks) {
-      state.wordBooks = data.wordBooks;
-      state.folders = data.folders || [];
-      state.currentBookId = data.currentBookId || (state.wordBooks.length > 0 ? state.wordBooks[0].id : null);
-    }
-    if (data.wrongWords) state.wrongWords = data.wrongWords;
-    if (data.practiceHistory) state.practiceHistory = data.practiceHistory;
-    if (data.settings) { Object.assign(state, data.settings); applySettings(); }
-    return true;
-  } catch(e) { console.warn('云端加载失败', e); return false; }
-}
-
-function applySettings() {
-  dom.rateSlider.value = state.rate; dom.rateValue.textContent = state.rate + 'x';
-  dom.pitchSlider.value = state.pitch; dom.pitchValue.textContent = state.pitch;
-  if (state.interval) dom.intervalSelect.value = state.interval / 1000;
-  if (state.repeatCount) dom.repeatSelect.value = state.repeatCount;
-  if (state.ttsEngine) dom.ttsEngine.value = state.ttsEngine;
-}
-
-if (firebaseReady) {
-  firebase.auth().onAuthStateChanged(async user => {
-    if (user) {
-      currentUser = user;
-      dom.btnLogin.style.display = 'none';
-      dom.btnLogout.style.display = '';
-      dom.userInfo.innerHTML = `<img class="user-avatar" src="${user.photoURL || ''}" onerror="this.style.display='none'"> ${user.displayName || user.email}`;
-      dom.syncStatus.textContent = '同步中...';
-      const loaded = await loadFromCloud();
-      if (!loaded) {
-        // 首次登录，把本地数据上传到云端
-        saveToCloud();
-      } else {
-        // 云端数据覆盖本地（云端优先）
-        saveAll(); saveWrongWords(); savePracticeHistory(); saveSettings();
-      }
-      dom.syncStatus.textContent = '已同步';
-      setTimeout(() => { if (dom.syncStatus.textContent === '已同步') dom.syncStatus.textContent = ''; }, 2000);
-      renderBookTree(); renderWordList(); renderWrongWords(); renderPracticeHistory();
-      populateDictationBookSelect(); updateWrongBadge(); updatePlayUI();
-    } else {
-      currentUser = null;
-      dom.btnLogin.style.display = '';
-      dom.btnLogout.style.display = 'none';
-      dom.userInfo.innerHTML = '';
-      dom.syncStatus.textContent = '';
-    }
-  });
-
-  dom.btnLogin.addEventListener('click', () => {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    firebase.auth().signInWithPopup(provider).catch(e => alert('登录失败: ' + e.message));
-  });
-
-  dom.btnLogout.addEventListener('click', () => {
-    firebase.auth().signOut();
-  });
-}
-
-// 重写保存函数，同步到云端
-const _saveAll = saveAll;
-saveAll = function() { _saveAll(); saveToCloud(); };
-const _saveWrongWords = saveWrongWords;
-saveWrongWords = function() { _saveWrongWords(); saveToCloud(); };
-const _savePracticeHistory = savePracticeHistory;
-savePracticeHistory = function() { _savePracticeHistory(); saveToCloud(); };
-const _saveSettings = saveSettings;
-saveSettings = function() { _saveSettings(); saveToCloud(); };
-
 // ==================== 键盘 ====================
 document.addEventListener('keydown', e => {
   if (e.target === dom.dictationInput || e.target === dom.modalBookName || e.target === dom.modalFolderName) return;
@@ -1610,7 +1462,6 @@ document.addEventListener('keydown', e => {
 loadAll(); loadSettings(); loadPracticeHistory();
 renderBookTree(); renderWordList(); updatePlayUI(); populateDictationBookSelect();
 updateWrongBadge(); renderPracticeHistory();
-initFirebase();
 </script>
 </body>
 </html>
