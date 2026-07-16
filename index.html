@@ -1236,7 +1236,9 @@ async function playDictationWord() {
     if (state.dictationTotal > 0) {
       const bookName = state.dictationBookName || '未知';
       state.practiceHistory.unshift({
-        id: genId(), bookName, date: new Date().toLocaleString('zh-CN'),
+        id: genId(), bookName,
+        bookId: state.dictationSourceBookId || '',
+        date: new Date().toLocaleString('zh-CN'),
         total: state.dictationTotal, correct: state.dictationCorrect, wrong: state.dictationWrong,
         accuracy: Math.round((state.dictationCorrect / state.dictationTotal) * 100)
       });
@@ -1497,28 +1499,32 @@ dom.btnClearWrong.addEventListener('click', () => { if (confirm('确定清空所
 // ==================== 练习记录 ====================
 function renderPracticeHistory() {
   if (state.practiceHistory.length === 0) { dom.historyList.innerHTML = '<div class="empty-state"><div class="icon">📋</div>暂无练习记录</div>'; return; }
-  // Group by book name
+  // Group by bookId (normalized), fallback to bookName
   const groups = {};
   state.practiceHistory.forEach(r => {
-    if (!groups[r.bookName]) groups[r.bookName] = [];
-    groups[r.bookName].push(r);
+    const key = r.bookId || r.bookName;
+    if (!groups[key]) groups[key] = { title: r.bookName.replace(/ 错词$/, ''), records: [] };
+    groups[key].records.push(r);
   });
-  // Sort groups by most recent session
   const sortedGroups = Object.entries(groups).sort((a, b) => {
-    const aLatest = a[1].reduce((max, r) => r.date > max ? r.date : max, '');
-    const bLatest = b[1].reduce((max, r) => r.date > max ? r.date : max, '');
+    const aLatest = a[1].records.reduce((max, r) => r.date > max ? r.date : max, '');
+    const bLatest = b[1].records.reduce((max, r) => r.date > max ? r.date : max, '');
     return bLatest.localeCompare(aLatest);
   });
   let h = '';
-  sortedGroups.forEach(([bookName, records]) => {
+  sortedGroups.forEach(([key, group]) => {
+    const records = group.records;
     records.sort((a, b) => b.date.localeCompare(a.date));
     const avgAcc = Math.round(records.reduce((s, r) => s + r.accuracy, 0) / records.length);
     const totalSessions = records.length;
     const latest = records[0].date;
     const accColor = avgAcc >= 80 ? 'color:#22c55e' : avgAcc >= 50 ? 'color:#f59e0b' : 'color:#ef4444';
-    h += `<div class="wrong-book-section"><div class="wrong-book-header" style="cursor:default">📖 ${bookName} <span style="font-weight:400;font-size:.8rem;color:#888">（${totalSessions}次练习 | 平均正确率 <strong style="${accColor}">${avgAcc}%</strong> | 最近：${latest}）</span></div>`;
+    // Resolve title from current book name if available
+    const book = state.wordBooks.find(b => b.id === key);
+    const title = book ? book.name : group.title;
+    h += `<div class="wrong-book-section"><div class="wrong-book-header" style="cursor:default">📖 ${title} <span style="font-weight:400;font-size:.8rem;color:#888">（${totalSessions}次练习 | 平均正确率 <strong style="${accColor}">${avgAcc}%</strong> | 最近：${latest}）</span></div>`;
     h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr style="border-bottom:2px solid #eee">';
-    h += '<th style="padding:6px 8px;text-align:left">时间</th><th style="padding:6px 8px;text-align:center">总计</th><th style="padding:6px 8px;text-align:center">正确</th><th style="padding:6px 8px;text-align:center">错误</th><th style="padding:6px 8px;text-align:center">正确率</th>';
+    h += '<th style="padding:6px 8px;text-align:left">时间</th><th style="padding:6px 8px;text-align:center">总计</th><th style="padding:6px 8px;text-align:center">正确</th><th style="padding:6px 8px;text-align:center">错误</th><th style="padding:6px 8px;text-align:center">正确率</th><th style="padding:6px 8px;text-align:center"></th>';
     h += '</tr></thead><tbody>';
     records.forEach(r => {
       const ac = r.accuracy >= 80 ? 'color:#22c55e;font-weight:700' : r.accuracy >= 50 ? 'color:#f59e0b;font-weight:700' : 'color:#ef4444;font-weight:700';
@@ -1528,11 +1534,26 @@ function renderPracticeHistory() {
         <td style="padding:6px 8px;text-align:center;color:#22c55e">${r.correct}</td>
         <td style="padding:6px 8px;text-align:center;color:#ef4444">${r.wrong}</td>
         <td style="padding:6px 8px;text-align:center"><span style="${ac}">${r.accuracy}%</span></td>
+        <td style="padding:6px 8px;text-align:center"><button class="btn btn-outline btn-xs" data-action="editHistory" data-id="${r.id}" title="修改归属">✎</button></td>
       </tr>`;
     });
     h += '</tbody></table></div></div>';
   });
   dom.historyList.innerHTML = h;
+  // Bind edit buttons
+  dom.historyList.querySelectorAll('[data-action="editHistory"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const record = state.practiceHistory.find(r => r.id === id);
+      if (!record) return;
+      const newName = prompt('修改练习记录归属（输入单词本名称）', record.bookName);
+      if (newName !== null && newName.trim()) {
+        record.bookName = newName.trim();
+        savePracticeHistory();
+        renderPracticeHistory();
+      }
+    });
+  });
 }
 dom.btnClearHistory.addEventListener('click', () => { if (confirm('确定清空所有练习记录吗？')) { state.practiceHistory = []; savePracticeHistory(); renderPracticeHistory(); } });
 
