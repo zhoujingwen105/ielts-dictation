@@ -434,7 +434,7 @@ const state = {
   // 听写
   dictationWords: [], dictationIndex: -1,
   dictationTotal: 0, dictationCorrect: 0, dictationWrong: 0,
-  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationBookName: '', dictationTimer: null, dictationAdvanceTimer: null, dictationPaused: false,
+  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationBookName: '', dictationTimer: null, dictationAdvanceTimer: null, dictationPaused: false, _ttsKeepAlive: null,
   // 错词本: { [bookId]: { [word]: { correct, wrong, lastTime, translation } } }
   wrongWords: {},
   wrongBookCollapsed: {},
@@ -1080,7 +1080,19 @@ async function startPlayback() {
   state.isPlaying = false; updatePlayUI();
 }
 
-function stopPlayback() { state.isPlaying = false; speechSynthesis.cancel(); updatePlayUI(); }
+function stopPlayback() { state.isPlaying = false; speechSynthesis.cancel(); stopTtsKeepAlive(); updatePlayUI(); }
+
+function startTtsKeepAlive() {
+  stopTtsKeepAlive();
+  state._ttsKeepAlive = setInterval(() => {
+    speechSynthesis.pause();
+    speechSynthesis.resume();
+  }, 7000);
+}
+function stopTtsKeepAlive() {
+  if (state._ttsKeepAlive) { clearInterval(state._ttsKeepAlive); state._ttsKeepAlive = null; }
+}
+
 function jumpToWord(index) {
   const words = currentWords(); const wp = state.isPlaying; stopPlayback();
   state.currentIndex = index;
@@ -1183,6 +1195,7 @@ async function startDictation() {
   if (words.length === 0) { alert('所选单词本为空！'); return; }
   state.dictationBookName = bookName || '';
   initDictation(words, bookId);
+  startTtsKeepAlive();
   await sleep(80);
   playDictationWord();
 }
@@ -1243,6 +1256,7 @@ async function playDictationWord() {
   if (!state.dictationEnabled || state.dictationPaused || myId !== _playId) return;
   const wo = getNextDictationWord();
   if (!wo) {
+    stopTtsKeepAlive();
     dom.resultFeedback.innerHTML = '全部单词已完成！'; dom.resultFeedback.className = 'result-feedback correct';
     dom.btnDictationPlay.disabled = true; dom.dictationInput.disabled = true;
     dom.btnDictationPause.style.display = 'none'; dom.btnDictationPrev.style.display = 'none'; dom.btnDictationNext.style.display = 'none';
@@ -1265,7 +1279,7 @@ async function playDictationWord() {
   dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.resultFeedback.textContent = ''; dom.resultFeedback.className = 'result-feedback';
   if (!isContinuousMode()) dom.dictationInput.disabled = true;
   await speakWord(wo.text);
-  if (state.dictationPaused) return;
+  if (myId !== _playId || state.dictationPaused) return;
   dom.dictationInput.disabled = false; dom.dictationInput.focus();
   if (isContinuousMode()) state.dictationTimer = setTimeout(autoSkipCurrentWord, getDictationTimeout(wo.text));
 }
