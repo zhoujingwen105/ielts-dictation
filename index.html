@@ -90,6 +90,9 @@ textarea:focus{outline:none;border-color:#667eea}
 .word-tag.active{background:#667eea;color:#fff;border-color:#667eea;animation:pulse .6s ease-in-out}
 .word-tag.played{opacity:.5}
 .word-tag .tag-translation{font-size:.7rem;opacity:.7;margin-top:2px}
+.word-tag .tag-edit{font-size:.65rem;opacity:0;margin-left:4px;cursor:pointer;padding:2px 4px;border-radius:3px;border:none;background:transparent;color:inherit;transition:opacity .15s}
+.word-tag:hover .tag-edit{opacity:.6}
+.word-tag .tag-edit:hover{opacity:1;background:rgba(0,0,0,.1)}
 .word-tag.active .tag-translation{opacity:1}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 
@@ -130,7 +133,7 @@ textarea:focus{outline:none;border-color:#667eea}
 .stat-value.total{color:#667eea}
 
 .wrong-book-section{margin-bottom:16px}
-.wrong-book-header{font-size:.95rem;font-weight:600;color:#555;padding:8px 0;border-bottom:2px solid #f0f0f0;margin-bottom:8px;cursor:pointer;user-select:none}.wrong-book-header:hover{color:#333}.wrong-book-body.collapsed{display:none}.wrong-toggle-icon{display:inline-block;transition:transform .2s}.wrong-toggle-icon.rotated{transform:rotate(90deg)}
+.wrong-book-header{font-size:.95rem;font-weight:600;color:#555;padding:8px 0;border-bottom:2px solid #f0f0f0;margin-bottom:8px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap}.wrong-book-header:hover{color:#333}.wrong-book-body.collapsed{display:none}.wrong-toggle-icon{display:inline-block;transition:transform .2s;flex-shrink:0}.wrong-toggle-icon.rotated{transform:rotate(90deg)}
 .wrong-word-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #f0f0f0;gap:8px;flex-wrap:wrap}
 .wrong-word-item:last-child{border-bottom:none}
 .wrong-word-info{flex:1;min-width:120px}
@@ -429,7 +432,7 @@ const state = {
   // 听写
   dictationWords: [], dictationIndex: -1,
   dictationTotal: 0, dictationCorrect: 0, dictationWrong: 0,
-  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationTimer: null, dictationPaused: false,
+  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationBookName: '', dictationTimer: null, dictationPaused: false,
   // 错词本: { [bookId]: { [word]: { correct, wrong, lastTime, translation } } }
   wrongWords: {},
   wrongBookCollapsed: {},
@@ -869,10 +872,19 @@ function savePracticeHistory() { localStorage.setItem('ielts_practice_history', 
 function parseWordLine(line) {
   const t = line.trim();
   if (!t) return null;
+  // "word - translation" or "word — translation"
   const dm = t.match(/^(.+?)\s*[-—]\s*(.+)$/);
   if (dm) { const tx = dm[1].trim(); if (/[a-zA-Z]/.test(tx)) return { text: tx, translation: dm[2].trim() }; }
-  const sm = t.match(/^([a-zA-Z][a-zA-Z\s'-]*?)\s+([一-鿿].+)$/);
-  if (sm) return { text: sm[1].trim(), translation: sm[2].trim() };
+  // Find last Chinese character block as translation
+  const cnMatch = t.match(/[一-鿿㐀-䶿豈-﫿][一-鿿㐀-䶿豈-﫿\d\s.,;:!?，。；：！？、"""''（）()【】\[\]…—–·/]*$/);
+  if (cnMatch && cnMatch.index > 0) {
+    const wordPart = t.substring(0, cnMatch.index).trim();
+    const transPart = t.substring(cnMatch.index).trim();
+    if (/[a-zA-Z]/.test(wordPart) && wordPart.length > 0) {
+      return { text: wordPart, translation: transPart };
+    }
+  }
+  // No Chinese found, whole line is word
   if (/[a-zA-Z]/.test(t)) return { text: t, translation: '' };
   return null;
 }
@@ -884,11 +896,13 @@ function parseWords() {
   raw.split(/\n/).forEach(line => {
     const trimmed = line.trim();
     if (!trimmed) return;
-    if (!/[一-鿿]/.test(trimmed) && /[,，\s]/.test(trimmed)) {
-      trimmed.split(/[,，\s]+/).filter(p => p.length > 0 && /[a-zA-Z]/.test(p)).forEach(p => result.push({ text: p, translation: '' }));
+    const p = parseWordLine(trimmed);
+    if (!p) return;
+    // If no translation found, no Chinese in line, and contains commas, split by comma
+    if (!p.translation && !/[一-鿿]/.test(trimmed) && /[,，]/.test(trimmed)) {
+      trimmed.split(/[,，]+/).filter(x => x.trim() && /[a-zA-Z]/.test(x.trim())).forEach(x => result.push({ text: x.trim(), translation: '' }));
     } else {
-      const p = parseWordLine(trimmed);
-      if (p) result.push(p);
+      result.push(p);
     }
   });
   return result;
@@ -929,10 +943,27 @@ function renderWordList() {
   }
   dom.wordList.innerHTML = words.map((w, i) => {
     const th = w.translation ? `<span class="tag-translation">${w.translation}</span>` : '';
-    return `<span class="word-tag" data-index="${i}">${w.text}${th}</span>`;
+    return `<span class="word-tag" data-index="${i}">${w.text}${th}<button class="tag-edit" data-index="${i}" title="编辑">✎</button></span>`;
   }).join('');
   dom.wordList.querySelectorAll('.word-tag').forEach(tag => {
-    tag.addEventListener('click', () => jumpToWord(parseInt(tag.dataset.index)));
+    tag.addEventListener('click', (e) => {
+      if (e.target.classList.contains('tag-edit')) return;
+      jumpToWord(parseInt(tag.dataset.index));
+    });
+  });
+  dom.wordList.querySelectorAll('.tag-edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.index);
+      const w = words[i];
+      const newVal = prompt('编辑单词（格式：单词 释义）', w.translation ? `${w.text} ${w.translation}` : w.text);
+      if (newVal !== null && newVal.trim()) {
+        const parsed = parseWordLine(newVal.trim());
+        if (parsed) { w.text = parsed.text; w.translation = parsed.translation; }
+        else { w.text = newVal.trim(); w.translation = ''; }
+        saveAll(); renderWordList(); updatePlayUI();
+      }
+    });
   });
   const book = currentBook();
   if (book) dom.bookInfo.textContent = `创建于 ${new Date(book.createdAt).toLocaleDateString('zh-CN')}`;
@@ -1080,7 +1111,6 @@ dom.playMode.addEventListener('change', () => { state.playMode = dom.playMode.va
 // 填充听写模式的单词本选择器
 function populateDictationBookSelect() {
   let html = '<option value="__current__">当前单词本</option>';
-  // 按文件夹分组
   state.folders.forEach(f => {
     const books = state.wordBooks.filter(b => b.folderId === f.id);
     if (books.length > 0) {
@@ -1095,6 +1125,16 @@ function populateDictationBookSelect() {
     uncat.forEach(b => html += `<option value="${b.id}">${b.name} (${b.words.length}词)</option>`);
     html += '</optgroup>';
   }
+  // 按单词本的错词
+  const booksWithWrong = state.wordBooks.filter(b => state.wrongWords[b.id] && Object.values(state.wrongWords[b.id]).some(r => r.wrong > 0));
+  if (booksWithWrong.length > 0) {
+    html += '<optgroup label="📝 错词（按单词本）">';
+    booksWithWrong.forEach(b => {
+      const wc = Object.values(state.wrongWords[b.id]).filter(r => r.wrong > 0).length;
+      html += `<option value="__wrong_${b.id}__">${b.name} 错词 (${wc}词)</option>`;
+    });
+    html += '</optgroup>';
+  }
   html += '<option value="__wrong__">错词合集</option>';
   dom.dictationBookSelect.innerHTML = html;
 }
@@ -1102,7 +1142,8 @@ function populateDictationBookSelect() {
 function getDictationWords() {
   const val = dom.dictationBookSelect.value;
   if (val === '__current__') {
-    return { words: currentWords(), bookId: state.currentBookId };
+    const book = currentBook();
+    return { words: currentWords(), bookId: state.currentBookId, bookName: book ? book.name : '当前单词本' };
   }
   if (val === '__wrong__') {
     const minCount = parseInt(dom.wrongMinCount.value) || 1;
@@ -1112,17 +1153,32 @@ function getDictationWords() {
         if (!seen.has(w) && info.wrong >= minCount) { seen.add(w); aw.push({ text: w, translation: info.translation || '', bookId: bid }); }
       });
     });
-    return { words: aw, bookId: null };
+    return { words: aw, bookId: null, bookName: '错词合集' };
+  }
+  // 按单词本错词
+  const wrongBookMatch = val.match(/^__wrong_(.+)__$/);
+  if (wrongBookMatch) {
+    const bid = wrongBookMatch[1];
+    const minCount = parseInt(dom.wrongMinCount.value) || 1;
+    const aw = [];
+    if (state.wrongWords[bid]) {
+      Object.entries(state.wrongWords[bid]).forEach(([w, info]) => {
+        if (info.wrong >= minCount) aw.push({ text: w, translation: info.translation || '', bookId: bid });
+      });
+    }
+    const book = state.wordBooks.find(b => b.id === bid);
+    return { words: aw, bookId: bid, bookName: book ? (book.name + ' 错词') : '错词' };
   }
   // 特定单词本
   const book = state.wordBooks.find(b => b.id === val);
-  if (book) return { words: book.words, bookId: book.id };
-  return { words: currentWords(), bookId: state.currentBookId };
+  if (book) return { words: book.words, bookId: book.id, bookName: book.name };
+  return { words: currentWords(), bookId: state.currentBookId, bookName: '当前单词本' };
 }
 
 async function startDictation() {
-  const { words, bookId } = getDictationWords();
+  const { words, bookId, bookName } = getDictationWords();
   if (words.length === 0) { alert('所选单词本为空！'); return; }
+  state.dictationBookName = bookName || '';
   initDictation(words, bookId);
   await sleep(80);
   playDictationWord();
@@ -1178,8 +1234,7 @@ async function playDictationWord() {
     dom.btnDictationPlay.disabled = true; dom.dictationInput.disabled = true;
     dom.btnDictationPause.style.display = 'none'; dom.btnDictationPrev.style.display = 'none'; dom.btnDictationNext.style.display = 'none';
     if (state.dictationTotal > 0) {
-      const sel = dom.dictationBookSelect.selectedOptions[0];
-      const bookName = sel ? sel.textContent : '未知';
+      const bookName = state.dictationBookName || '未知';
       state.practiceHistory.unshift({
         id: genId(), bookName, date: new Date().toLocaleString('zh-CN'),
         total: state.dictationTotal, correct: state.dictationCorrect, wrong: state.dictationWrong,
@@ -1331,7 +1386,8 @@ dom.btnDictationPause.addEventListener('click', async () => {
 dom.dictationInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); checkDictationAnswer(); } });
 dom.btnDictationRestart.addEventListener('click', startDictation);
 dom.dictationBookSelect.addEventListener('change', () => {
-  const isWrong = dom.dictationBookSelect.value === '__wrong__';
+  const val = dom.dictationBookSelect.value;
+  const isWrong = val === '__wrong__' || /^__wrong_/.test(val);
   dom.wrongMinCount.style.display = isWrong ? '' : 'none';
   document.getElementById('wrongFilterLabel').style.display = isWrong ? '' : 'none';
 });
@@ -1395,6 +1451,8 @@ function renderWrongWords() {
       });
     }
     if (aw.length === 0) { alert('该单词本没有符合条件的错词！'); return; }
+    const book = state.wordBooks.find(b => b.id === bid);
+    state.dictationBookName = book ? (book.name + ' 错词') : '错词';
     switchToDictationTab();
     dom.dictationBookSelect.value = '__wrong__';
     dom.wrongMinCount.value = minCount;
