@@ -1255,7 +1255,7 @@ function autoSkipCurrentWord() {
   const c = state.dictationCurrentWord;
   const th = c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
   dom.resultFeedback.innerHTML = `⏰ 时间到！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong';
-  state.dictationTimer = setTimeout(() => { dom.dictationInput.disabled = false; playDictationWord(); }, 1500);
+  state.dictationTimer = setTimeout(() => { dom.dictationInput.disabled = false; playDictationWord(); }, 900);
   state.dictationAdvanceTimer = state.dictationTimer;
 }
 
@@ -1366,13 +1366,14 @@ function checkDictationAnswer() {
 
   if (isUntilCorrectMode()) {
     if (isC) {
-      applyWordAnswer(c, true);
+      if (!c._untilCorrectWrong) applyWordAnswer(c, true);
       dom.dictationInput.className = 'dictation-input correct';
       dom.resultFeedback.innerHTML = `✓ 正确！${th}`;
       dom.resultFeedback.className = 'result-feedback correct';
       dom.dictationInput.disabled = true;
-      state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1000);
+      state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 600);
     } else {
+      if (!c._untilCorrectWrong) { c._untilCorrectWrong = true; applyWordAnswer(c, false); }
       dom.dictationInput.className = 'dictation-input wrong';
       dom.resultFeedback.innerHTML = `✗ 错误！正确拼写：<b>${c.text}</b>${th}`;
       dom.resultFeedback.className = 'result-feedback wrong';
@@ -1387,7 +1388,7 @@ function checkDictationAnswer() {
         dom.dictationInput.focus();
         await speakWord(c.text);
         if (state.dictationEnabled) dom.dictationInput.focus();
-      }, 1200);
+      }, 800);
     }
     return;
   }
@@ -1395,8 +1396,9 @@ function checkDictationAnswer() {
   applyWordAnswer(c, isC);
   if (isC) { dom.dictationInput.className = 'dictation-input correct'; dom.resultFeedback.innerHTML = `✓ 正确！${th}`; dom.resultFeedback.className = 'result-feedback correct'; }
   else { dom.dictationInput.className = 'dictation-input wrong'; dom.resultFeedback.innerHTML = `✗ 错误！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong'; }
-  if (isContinuousMode()) { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
-  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1800); }
+  const pause = isC ? 600 : 900;
+  if (isContinuousMode()) { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, pause); }
+  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, pause); }
 }
 
 function updateWrongBadge() {
@@ -1417,7 +1419,7 @@ dom.btnDictationSkip.addEventListener('click', () => {
   dom.resultFeedback.innerHTML = c ? `已跳过，正确拼写：<b>${c.text}</b>${th}` : '';
   dom.resultFeedback.className = 'result-feedback wrong';
   if (isContinuousMode()) { playDictationWord(); }
-  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
+  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 800); }
 });
 dom.btnDictationPrev.addEventListener('click', () => {
   if (!state.dictationEnabled || state.dictationPaused || state.dictationIndex <= 0) return;
@@ -1447,8 +1449,8 @@ dom.btnDictationNext.addEventListener('click', () => {
   const th = c && c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
   dom.resultFeedback.innerHTML = c ? `已跳过，正确拼写：<b>${c.text}</b>${th}` : '';
   dom.resultFeedback.className = 'result-feedback wrong';
-  if (isContinuousMode()) { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
-  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
+  if (isContinuousMode()) { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 900); }
+  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 800); }
 });
 
 dom.btnDictationPause.addEventListener('click', async () => {
@@ -1479,7 +1481,7 @@ dom.btnRedoWrong.addEventListener('click', async () => {
   const redoMode = document.querySelector('input[name="redoMode"]:checked').value;
   document.querySelector(`input[name="dictationMode"][value="${redoMode}"]`).checked = true;
   dom.dictationRedoWrong.style.display = 'none';
-  state.dictationBookName = (state.dictationBookName || '') + ' 错词';
+  state.dictationBookName = (state.dictationBookName || '').replace(/ 错词$/, '') + ' 错词';
   initDictation(words, state.dictationSourceBookId || '');
   startTtsKeepAlive();
   await sleep(80);
