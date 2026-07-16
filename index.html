@@ -964,7 +964,8 @@ function speakWordGoogle(word) {
     audio.src = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(word)}&tl=en-GB`;
     let resolved = false;
     const done = () => { if (!resolved) { resolved = true; resolve(); } };
-    const fallback = () => { audio.pause(); audio.removeAttribute('src'); audio.load(); speakWordWebSpeech(word).then(done); };
+    const cleanup = () => { audio.onended = null; audio.onerror = null; audio.pause(); audio.removeAttribute('src'); };
+    const fallback = () => { cleanup(); speakWordWebSpeech(word).then(done); };
     audio.onended = done;
     audio.onerror = fallback;
     audio.play().catch(fallback);
