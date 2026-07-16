@@ -434,7 +434,7 @@ const state = {
   // 听写
   dictationWords: [], dictationIndex: -1,
   dictationTotal: 0, dictationCorrect: 0, dictationWrong: 0,
-  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationBookName: '', dictationTimer: null, dictationPaused: false,
+  dictationCurrentWord: null, dictationEnabled: false, dictationSourceBookId: null, dictationBookName: '', dictationTimer: null, dictationAdvanceTimer: null, dictationPaused: false,
   // 错词本: { [bookId]: { [word]: { correct, wrong, lastTime, translation } } }
   wrongWords: {},
   wrongBookCollapsed: {},
@@ -1189,7 +1189,7 @@ async function startDictation() {
 
 function initDictation(wordObjs, sourceBookId) {
   if (!wordObjs || wordObjs.length === 0) { const w = currentWords(); if (w.length === 0) { alert('当前单词本为空！'); return; } wordObjs = w; sourceBookId = state.currentBookId; }
-  stopPlayback(); clearTimeout(state.dictationTimer);
+  stopPlayback(); clearTimeout(state.dictationTimer); clearTimeout(state.dictationAdvanceTimer);
   state.dictationWords = wordObjs.map(w => ({ text: w.text || w, translation: w.translation || '', bookId: w.bookId || sourceBookId || state.currentBookId || '' }));
   state.dictationSourceBookId = sourceBookId || state.currentBookId || '';
   state.dictationIndex = -1; state.dictationTotal = 0; state.dictationCorrect = 0; state.dictationWrong = 0;
@@ -1225,14 +1225,18 @@ function autoSkipCurrentWord() {
   const th = c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
   dom.resultFeedback.innerHTML = `⏰ 时间到！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong';
   state.dictationTimer = setTimeout(() => { dom.dictationInput.disabled = false; playDictationWord(); }, 1500);
+  state.dictationAdvanceTimer = state.dictationTimer;
 }
 
+let _playId = 0;
 async function playDictationWord() {
   if (!state.dictationEnabled || state.dictationPaused) return;
+  const myId = ++_playId;
   clearTimeout(state.dictationTimer);
+  clearTimeout(state.dictationAdvanceTimer);
   speechSynthesis.cancel();
   await sleep(80);
-  if (!state.dictationEnabled || state.dictationPaused) return;
+  if (!state.dictationEnabled || state.dictationPaused || myId !== _playId) return;
   const wo = getNextDictationWord();
   if (!wo) {
     dom.resultFeedback.innerHTML = '全部单词已完成！'; dom.resultFeedback.className = 'result-feedback correct';
@@ -1321,14 +1325,14 @@ function checkDictationAnswer() {
       dom.resultFeedback.innerHTML = `✓ 正确！${th}`;
       dom.resultFeedback.className = 'result-feedback correct';
       dom.dictationInput.disabled = true;
-      setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1000);
+      state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1000);
     } else {
       dom.dictationInput.className = 'dictation-input wrong';
       dom.resultFeedback.innerHTML = `✗ 错误！正确拼写：<b>${c.text}</b>${th}`;
       dom.resultFeedback.className = 'result-feedback wrong';
       dom.dictationInput.disabled = true;
       dom.dictationInput.value = '';
-      setTimeout(async () => {
+      state.dictationAdvanceTimer = setTimeout(async () => {
         if (!state.dictationEnabled || state.dictationPaused) return;
         dom.resultFeedback.textContent = '';
         dom.resultFeedback.className = 'result-feedback';
@@ -1345,8 +1349,8 @@ function checkDictationAnswer() {
   applyWordAnswer(c, isC);
   if (isC) { dom.dictationInput.className = 'dictation-input correct'; dom.resultFeedback.innerHTML = `✓ 正确！${th}`; dom.resultFeedback.className = 'result-feedback correct'; }
   else { dom.dictationInput.className = 'dictation-input wrong'; dom.resultFeedback.innerHTML = `✗ 错误！正确拼写：<b>${c.text}</b>${th}`; dom.resultFeedback.className = 'result-feedback wrong'; }
-  if (isContinuousMode()) { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
-  else { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1800); }
+  if (isContinuousMode()) { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
+  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1800); }
 }
 
 function updateWrongBadge() {
@@ -1359,7 +1363,7 @@ dom.btnDictationPlay.addEventListener('click', startDictation);
 dom.btnDictationRepeat.addEventListener('click', () => { if (state.dictationCurrentWord) speakWord(state.dictationCurrentWord.text); });
 dom.btnDictationSkip.addEventListener('click', () => {
   if (!state.dictationEnabled) return;
-  clearTimeout(state.dictationTimer);
+  clearTimeout(state.dictationTimer); clearTimeout(state.dictationAdvanceTimer);
   const c = state.dictationCurrentWord;
   if (c) applyWordAnswer(c, false);
   dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
@@ -1367,11 +1371,11 @@ dom.btnDictationSkip.addEventListener('click', () => {
   dom.resultFeedback.innerHTML = c ? `已跳过，正确拼写：<b>${c.text}</b>${th}` : '';
   dom.resultFeedback.className = 'result-feedback wrong';
   if (isContinuousMode()) { playDictationWord(); }
-  else { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
+  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
 });
 dom.btnDictationPrev.addEventListener('click', () => {
   if (!state.dictationEnabled || state.dictationPaused || state.dictationIndex <= 0) return;
-  clearTimeout(state.dictationTimer);
+  clearTimeout(state.dictationTimer); clearTimeout(state.dictationAdvanceTimer);
   // Undo current word's answer so it can be re-answered later
   const c = state.dictationCurrentWord;
   if (c && c._answered !== undefined) {
@@ -1390,15 +1394,15 @@ dom.btnDictationPrev.addEventListener('click', () => {
 });
 dom.btnDictationNext.addEventListener('click', () => {
   if (!state.dictationEnabled || state.dictationPaused) return;
-  clearTimeout(state.dictationTimer);
+  clearTimeout(state.dictationTimer); clearTimeout(state.dictationAdvanceTimer);
   const c = state.dictationCurrentWord;
   if (c) applyWordAnswer(c, false);
   dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input';
   const th = c && c.translation ? `<div class="translation-hint">释义：${c.translation}</div>` : '';
   dom.resultFeedback.innerHTML = c ? `已跳过，正确拼写：<b>${c.text}</b>${th}` : '';
   dom.resultFeedback.className = 'result-feedback wrong';
-  if (isContinuousMode()) { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
-  else { dom.dictationInput.disabled = true; setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
+  if (isContinuousMode()) { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled && !state.dictationPaused) { dom.dictationInput.value = ''; dom.dictationInput.className = 'dictation-input'; dom.dictationInput.disabled = false; playDictationWord(); } }, 1500); }
+  else { dom.dictationInput.disabled = true; state.dictationAdvanceTimer = setTimeout(() => { if (state.dictationEnabled) playDictationWord(); }, 1200); }
 });
 
 dom.btnDictationPause.addEventListener('click', async () => {
@@ -1415,6 +1419,7 @@ dom.btnDictationPause.addEventListener('click', async () => {
     state.dictationPaused = true;
     speechSynthesis.cancel();
     clearTimeout(state.dictationTimer);
+    clearTimeout(state.dictationAdvanceTimer);
     dom.dictationInput.disabled = true;
     dom.btnDictationPause.textContent = '▶ 继续';
   }
