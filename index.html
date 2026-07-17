@@ -7,7 +7,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333;min-height:100vh}
-.header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:20px;text-align:center}
+.header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:20px;text-align:center;position:relative}
 .header h1{font-size:1.5rem;font-weight:600}
 .header p{font-size:.85rem;opacity:.85;margin-top:4px}
 .container{max-width:780px;margin:0 auto;padding:16px}
@@ -175,13 +175,36 @@ input[type="range"]{width:120px}
   .book-tab{font-size:.78rem;padding:6px 10px}
   .folder-books{padding-left:12px}
 }
+/* 密码锁 */
+.lock-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column}
+.lock-card{background:#fff;border-radius:16px;padding:32px 28px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.2);max-width:380px;width:90%}
+.lock-card h2{font-size:1.3rem;color:#333;margin-bottom:6px}
+.lock-card p{font-size:.85rem;color:#888;margin-bottom:20px}
+.lock-card input{width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:1.1rem;text-align:center;letter-spacing:4px;transition:border-color .2s}
+.lock-card input:focus{outline:none;border-color:#667eea}
+.lock-card .lock-msg{font-size:.82rem;color:#e74c3c;min-height:22px;margin-top:8px}
+.lock-card .lock-btn{margin-top:16px;padding:12px 36px;font-size:1rem;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:600}
+.lock-card .lock-btn:hover{opacity:.9}
+.lock-card .lock-hint{font-size:.75rem;color:#aaa;margin-top:14px}
 </style>
 </head>
 <body>
 
+<div class="lock-overlay" id="lockOverlay">
+  <div class="lock-card">
+    <h2>🔒 访问需要密钥</h2>
+    <p id="lockPrompt">请输入密钥以进入听写工具</p>
+    <input type="password" id="lockInput" placeholder="输入密钥..." maxlength="50" autocomplete="off">
+    <div class="lock-msg" id="lockMsg"></div>
+    <button class="lock-btn" id="lockBtn">进入</button>
+    <div class="lock-hint" id="lockHint"></div>
+  </div>
+</div>
+
 <div class="header">
   <h1>雅思听力单词听写</h1>
   <p>粘贴单词，逐词朗读，听写自测</p>
+  <button id="btnLock" title="锁定应用" style="position:absolute;top:12px;right:16px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">🔒</button>
 </div>
 
 <div class="container">
@@ -378,6 +401,13 @@ input[type="range"]{width:120px}
       </div>
     </div>
     <div class="card" style="margin-top:16px">
+      <div class="card-title">安全</div>
+      <div class="setting-row">
+        <span class="setting-label">修改访问密钥</span>
+        <button class="btn btn-outline btn-sm" id="btnChangePassword">修改密钥</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
       <div class="card-title">数据管理</div>
       <div class="setting-row">
         <span class="setting-label">导出全部数据</span>
@@ -430,6 +460,91 @@ input[type="range"]{width:120px}
 </div>
 
 <script>
+// ==================== 密码锁 ====================
+(async function initLock() {
+  const STORAGE_KEY = 'ielts_pwd_hash';
+  const AUTH_KEY = 'ielts_auth';
+  const SALT = 'ielts_dictation_2024';
+
+  async function sha256(text) {
+    const data = new TextEncoder().encode(text + SALT);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+
+  if (sessionStorage.getItem(AUTH_KEY)) {
+    document.getElementById('lockOverlay').style.display = 'none';
+    return;
+  }
+
+  const overlay = document.getElementById('lockOverlay');
+  const input = document.getElementById('lockInput');
+  const msg = document.getElementById('lockMsg');
+  const btn = document.getElementById('lockBtn');
+  const prompt = document.getElementById('lockPrompt');
+  const hint = document.getElementById('lockHint');
+
+  let confirmInput = null;
+
+  function getSavedHash() { return localStorage.getItem(STORAGE_KEY); }
+
+  function setupSetPasswordMode() {
+    prompt.textContent = '请设置访问密钥';
+    input.placeholder = '输入新密钥...';
+    hint.textContent = '设置后请务必记住密钥';
+    btn.textContent = '设置密钥';
+    input.value = '';
+    msg.textContent = '';
+    if (confirmInput) { confirmInput.remove(); confirmInput = null; }
+    confirmInput = document.createElement('input');
+    confirmInput.type = 'password';
+    confirmInput.placeholder = '再次输入确认...';
+    confirmInput.maxLength = 50;
+    confirmInput.autocomplete = 'off';
+    confirmInput.style.cssText = 'width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:1.1rem;text-align:center;letter-spacing:4px;margin-top:10px;transition:border-color .2s';
+    confirmInput.addEventListener('focus', () => { confirmInput.style.borderColor = '#667eea'; });
+    confirmInput.addEventListener('blur', () => { confirmInput.style.borderColor = '#e0e0e0'; });
+    confirmInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+    input.parentNode.insertBefore(confirmInput, msg);
+  }
+
+  if (!getSavedHash()) {
+    setupSetPasswordMode();
+  }
+
+  async function tryUnlock() {
+    const val = input.value.trim();
+    if (!val) { msg.textContent = '请输入密钥'; return; }
+
+    const savedHash = getSavedHash();
+    if (!savedHash) {
+      // 设置新密码
+      if (val.length < 3) { msg.textContent = '密钥至少需要3个字符'; return; }
+      if (!confirmInput || confirmInput.value.trim() !== val) { msg.textContent = '两次输入不一致'; return; }
+      const hash = await sha256(val);
+      localStorage.setItem(STORAGE_KEY, hash);
+      sessionStorage.setItem(AUTH_KEY, '1');
+      overlay.style.display = 'none';
+      return;
+    }
+
+    // 验证密码
+    const hash = await sha256(val);
+    if (hash === savedHash) {
+      sessionStorage.setItem(AUTH_KEY, '1');
+      overlay.style.display = 'none';
+    } else {
+      msg.textContent = '密钥错误，请重试';
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  btn.addEventListener('click', tryUnlock);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+  if (confirmInput) confirmInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+})();
+
 // ==================== 全局状态 ====================
 const state = {
   folders: [],              // [{id, name, createdAt}]
@@ -1810,6 +1925,24 @@ document.addEventListener('keydown', e => {
     case 'ArrowLeft': e.preventDefault(); if (state.currentIndex > 0) jumpToWord(state.currentIndex - 1); break;
     case 'ArrowRight': e.preventDefault(); const w = currentWords(); if (state.currentIndex < w.length - 1) jumpToWord(state.currentIndex + 1); break;
   }
+});
+
+// ==================== 锁屏按钮 ====================
+const lockOverlay = document.getElementById('lockOverlay');
+document.getElementById('btnLock').addEventListener('click', () => {
+  sessionStorage.removeItem('ielts_auth');
+  lockOverlay.style.display = '';
+  const input = document.getElementById('lockInput');
+  input.value = '';
+  document.getElementById('lockMsg').textContent = '';
+  setTimeout(() => input.focus(), 100);
+});
+
+document.getElementById('btnChangePassword').addEventListener('click', () => {
+  localStorage.removeItem('ielts_pwd_hash');
+  sessionStorage.removeItem('ielts_auth');
+  // Re-run setup password mode by triggering the init flow
+  location.reload();
 });
 
 // ==================== 初始化 ====================
