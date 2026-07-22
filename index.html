@@ -401,10 +401,27 @@ input[type="range"]{width:120px}
       </div>
     </div>
     <div class="card" style="margin-top:16px">
-      <div class="card-title">安全</div>
+      <div class="card-title">密钥管理（管理员）</div>
       <div class="setting-row">
-        <span class="setting-label">修改访问密钥</span>
-        <button class="btn btn-outline btn-sm" id="btnChangePassword">修改密钥</button>
+        <span class="setting-label">管理员验证</span>
+        <input type="password" id="adminKeyInput" placeholder="输入主密钥以解锁管理功能..." style="width:200px;font-size:.85rem;padding:6px 10px;border-radius:6px;border:1px solid #ddd">
+        <button class="btn btn-outline btn-sm" id="btnAdminUnlock">验证</button>
+        <span id="adminStatus" style="font-size:.8rem;color:#27ae60;display:none">✓ 已解锁</span>
+      </div>
+      <div id="adminKeyPanel" style="display:none;margin-top:12px">
+        <div style="font-size:.85rem;color:#666;margin-bottom:10px">
+          <b>当前有效密钥：</b><span id="adminKeyCount">0</span> 个
+          （部署版：<span id="adminDeployedCount">0</span> 个 + 本地：<span id="adminLocalCount">0</span> 个）
+        </div>
+        <div id="adminKeyList" style="max-height:200px;overflow-y:auto;margin-bottom:10px;font-size:.82rem"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="btnGenKey">+ 生成新密钥</button>
+          <button class="btn btn-outline btn-sm" id="btnExportKeys">导出部署代码</button>
+          <button class="btn btn-danger btn-sm" id="btnResetAdmin" style="font-size:.75rem">重置主密钥</button>
+        </div>
+        <div style="font-size:.7rem;color:#999;margin-top:8px">
+          生成新密钥后，须点击"导出部署代码"并更新 HTML 中的 DEPLOYED_KEY_HASHES 数组，重新部署后所有用户才能使用新密钥。
+        </div>
       </div>
     </div>
     <div class="card" style="margin-top:16px">
@@ -460,90 +477,145 @@ input[type="range"]{width:120px}
 </div>
 
 <script>
-// ==================== 密码锁 ====================
-(async function initLock() {
-  const STORAGE_KEY = 'ielts_pwd_hash';
-  const AUTH_KEY = 'ielts_auth';
-  const SALT = 'ielts_dictation_2024';
+// ==================== 密码锁（多密钥） ====================
+const DEPLOYED_KEY_HASHES = [
+  '285890b896a25708bd14a3103bfd0749cf78ffd41fc23d178d4eeaa44708523e', // 默认主密钥: admin-ielts
+];
+const LOCK_SALT = 'ielts_dictation_2024';
+const LOCK_AUTH_KEY = 'ielts_auth';
+const LOCK_KEYS_STORE = 'ielts_keys'; // [{hash, label, createdAt}]
+const LOCK_MASTER_OVERRIDE = 'ielts_master_override';
 
-  async function sha256(text) {
-    const data = new TextEncoder().encode(text + SALT);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
-  }
+// Restore master key override from localStorage (survives page refresh)
+(function() {
+  const ov = localStorage.getItem(LOCK_MASTER_OVERRIDE);
+  if (ov) DEPLOYED_KEY_HASHES[0] = ov;
+})();
 
-  if (sessionStorage.getItem(AUTH_KEY)) {
-    document.getElementById('lockOverlay').style.display = 'none';
-    return;
-  }
+async function sha256(text) {
+  const data = new TextEncoder().encode(text + LOCK_SALT);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
 
+function getAllValidHashes() {
+  const local = loadLocalKeys();
+  return [...DEPLOYED_KEY_HASHES, ...local.filter(k => k.active !== false).map(k => k.hash)];
+}
+
+function loadLocalKeys() {
+  try { return JSON.parse(localStorage.getItem(LOCK_KEYS_STORE)) || []; }
+  catch(e) { return []; }
+}
+function saveLocalKeys(keys) { localStorage.setItem(LOCK_KEYS_STORE, JSON.stringify(keys)); }
+
+// Shared lock screen state
+let _lockConfirmInput = null;
+let _lockIsSetup = false;
+
+function showLockOverlay(setupMode) {
   const overlay = document.getElementById('lockOverlay');
   const input = document.getElementById('lockInput');
   const msg = document.getElementById('lockMsg');
   const btn = document.getElementById('lockBtn');
   const prompt = document.getElementById('lockPrompt');
   const hint = document.getElementById('lockHint');
-
-  let confirmInput = null;
-
-  function getSavedHash() { return localStorage.getItem(STORAGE_KEY); }
-
-  function setupSetPasswordMode() {
-    prompt.textContent = '请设置访问密钥';
-    input.placeholder = '输入新密钥...';
-    hint.textContent = '设置后请务必记住密钥';
-    btn.textContent = '设置密钥';
-    input.value = '';
-    msg.textContent = '';
-    if (confirmInput) { confirmInput.remove(); confirmInput = null; }
-    confirmInput = document.createElement('input');
-    confirmInput.type = 'password';
-    confirmInput.placeholder = '再次输入确认...';
-    confirmInput.maxLength = 50;
-    confirmInput.autocomplete = 'off';
-    confirmInput.style.cssText = 'width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:1.1rem;text-align:center;letter-spacing:4px;margin-top:10px;transition:border-color .2s';
-    confirmInput.addEventListener('focus', () => { confirmInput.style.borderColor = '#667eea'; });
-    confirmInput.addEventListener('blur', () => { confirmInput.style.borderColor = '#e0e0e0'; });
-    confirmInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-    input.parentNode.insertBefore(confirmInput, msg);
+  overlay.style.display = '';
+  input.value = ''; msg.textContent = '';
+  if (_lockConfirmInput) { _lockConfirmInput.remove(); _lockConfirmInput = null; }
+  _lockIsSetup = !!setupMode;
+  if (setupMode) {
+    prompt.textContent = '首次使用，请设置主密钥';
+    input.placeholder = '设置主密钥...';
+    hint.textContent = '这是管理员密钥，请妥善保管';
+    btn.textContent = '设置主密钥';
+    _lockConfirmInput = document.createElement('input');
+    _lockConfirmInput.type = 'password';
+    _lockConfirmInput.placeholder = '再次输入确认...';
+    _lockConfirmInput.maxLength = 50;
+    _lockConfirmInput.autocomplete = 'off';
+    _lockConfirmInput.style.cssText = 'width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:1.1rem;text-align:center;letter-spacing:4px;margin-top:10px;transition:border-color .2s';
+    _lockConfirmInput.addEventListener('focus', () => { _lockConfirmInput.style.borderColor = '#667eea'; });
+    _lockConfirmInput.addEventListener('blur', () => { _lockConfirmInput.style.borderColor = '#e0e0e0'; });
+    _lockConfirmInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryLockUnlock(); });
+    input.parentNode.insertBefore(_lockConfirmInput, msg);
+  } else {
+    prompt.textContent = '请输入访问密钥';
+    input.placeholder = '输入密钥...';
+    hint.textContent = '';
+    btn.textContent = '进入';
   }
+  setTimeout(() => input.focus(), 100);
+}
 
-  if (!getSavedHash()) {
-    setupSetPasswordMode();
-  }
+async function tryLockUnlock() {
+  const input = document.getElementById('lockInput');
+  const msg = document.getElementById('lockMsg');
+  const overlay = document.getElementById('lockOverlay');
+  const val = input.value.trim();
+  if (!val) { msg.textContent = '请输入密钥'; return; }
 
-  async function tryUnlock() {
-    const val = input.value.trim();
-    if (!val) { msg.textContent = '请输入密钥'; return; }
-
-    const savedHash = getSavedHash();
-    if (!savedHash) {
-      // 设置新密码
-      if (val.length < 3) { msg.textContent = '密钥至少需要3个字符'; return; }
-      if (!confirmInput || confirmInput.value.trim() !== val) { msg.textContent = '两次输入不一致'; return; }
-      const hash = await sha256(val);
-      localStorage.setItem(STORAGE_KEY, hash);
-      sessionStorage.setItem(AUTH_KEY, '1');
-      overlay.style.display = 'none';
-      return;
-    }
-
-    // 验证密码
+  if (_lockIsSetup) {
+    if (val.length < 3) { msg.textContent = '密钥至少需要3个字符'; return; }
+    if (!_lockConfirmInput || _lockConfirmInput.value.trim() !== val) { msg.textContent = '两次输入不一致'; return; }
     const hash = await sha256(val);
-    if (hash === savedHash) {
-      sessionStorage.setItem(AUTH_KEY, '1');
-      overlay.style.display = 'none';
-    } else {
-      msg.textContent = '密钥错误，请重试';
-      input.value = '';
-      input.focus();
-    }
+    // Replace the first (default) hash with the new master key
+    DEPLOYED_KEY_HASHES[0] = hash;
+    localStorage.setItem(LOCK_MASTER_OVERRIDE, hash);
+    sessionStorage.setItem(LOCK_AUTH_KEY, '1');
+    overlay.style.display = 'none';
+    // Prompt to export
+    setTimeout(() => {
+      if (confirm('主密钥已设置！\n\n是否立即导出部署代码？（你需要更新 HTML 中的 DEPLOYED_KEY_HASHES 并重新部署才能在其他设备生效）')) {
+        exportDeployCode();
+      }
+    }, 300);
+    return;
   }
 
-  btn.addEventListener('click', tryUnlock);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-  if (confirmInput) confirmInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+  const hash = await sha256(val);
+  const valid = getAllValidHashes();
+  if (valid.includes(hash)) {
+    sessionStorage.setItem(LOCK_AUTH_KEY, '1');
+    overlay.style.display = 'none';
+  } else {
+    msg.textContent = '密钥错误，请重试';
+    input.value = '';
+    input.focus();
+  }
+}
+
+(async function initLock() {
+  const overlay = document.getElementById('lockOverlay');
+  const input = document.getElementById('lockInput');
+  const btn = document.getElementById('lockBtn');
+
+  if (sessionStorage.getItem(LOCK_AUTH_KEY)) {
+    overlay.style.display = 'none';
+    return;
+  }
+
+  // Check if any valid keys exist at all (deployed + local)
+  if (getAllValidHashes().length === 0) {
+    showLockOverlay(true); // setup mode
+  } else {
+    showLockOverlay(false);
+  }
+
+  btn.addEventListener('click', tryLockUnlock);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') tryLockUnlock(); });
 })();
+
+function exportDeployCode() {
+  const local = loadLocalKeys().filter(k => k.active !== false);
+  const all = [...DEPLOYED_KEY_HASHES, ...local.map(k => k.hash)];
+  const code = 'const DEPLOYED_KEY_HASHES = [\n  \'' + all.join('\',\n  \'') + '\'\n];';
+  navigator.clipboard.writeText(code).then(() => {
+    alert('部署代码已复制到剪贴板！\n\n请在 HTML 文件中替换 DEPLOYED_KEY_HASHES 数组，然后重新部署。');
+  }).catch(() => {
+    prompt('请手动复制以下代码，替换 HTML 中的 DEPLOYED_KEY_HASHES 数组：', code);
+  });
+}
 
 // ==================== 全局状态 ====================
 const state = {
@@ -1928,21 +2000,120 @@ document.addEventListener('keydown', e => {
 });
 
 // ==================== 锁屏按钮 ====================
-const lockOverlay = document.getElementById('lockOverlay');
 document.getElementById('btnLock').addEventListener('click', () => {
-  sessionStorage.removeItem('ielts_auth');
-  lockOverlay.style.display = '';
-  const input = document.getElementById('lockInput');
-  input.value = '';
-  document.getElementById('lockMsg').textContent = '';
-  setTimeout(() => input.focus(), 100);
+  sessionStorage.removeItem(LOCK_AUTH_KEY);
+  showLockOverlay(false);
 });
 
-document.getElementById('btnChangePassword').addEventListener('click', () => {
-  localStorage.removeItem('ielts_pwd_hash');
-  sessionStorage.removeItem('ielts_auth');
-  // Re-run setup password mode by triggering the init flow
-  location.reload();
+// ==================== 密钥管理面板 ====================
+let _adminUnlocked = false;
+const domAdmin = {
+  adminKeyInput: document.getElementById('adminKeyInput'),
+  btnAdminUnlock: document.getElementById('btnAdminUnlock'),
+  adminStatus: document.getElementById('adminStatus'),
+  adminKeyPanel: document.getElementById('adminKeyPanel'),
+  adminKeyCount: document.getElementById('adminKeyCount'),
+  adminDeployedCount: document.getElementById('adminDeployedCount'),
+  adminLocalCount: document.getElementById('adminLocalCount'),
+  adminKeyList: document.getElementById('adminKeyList'),
+  btnGenKey: document.getElementById('btnGenKey'),
+  btnExportKeys: document.getElementById('btnExportKeys'),
+  btnResetAdmin: document.getElementById('btnResetAdmin'),
+};
+
+function refreshAdminPanel() {
+  const local = loadLocalKeys();
+  const active = local.filter(k => k.active !== false);
+  domAdmin.adminKeyCount.textContent = DEPLOYED_KEY_HASHES.length + active.length;
+  domAdmin.adminDeployedCount.textContent = DEPLOYED_KEY_HASHES.length;
+  domAdmin.adminLocalCount.textContent = active.length;
+
+  let html = '';
+  DEPLOYED_KEY_HASHES.forEach((h, i) => {
+    html += `<div style="padding:3px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:6px">
+      <span style="color:#667eea;font-weight:600">🔑 主密钥${i > 0 ? ' #'+(i+1) : ''}</span>
+      <code style="font-size:.7rem;color:#888">${h.substring(0,10)}...</code>
+      <span style="font-size:.7rem;color:#aaa">部署版</span>
+      ${i === 0 ? '<span style="font-size:.7rem;color:#e67e22">（管理员）</span>' : ''}
+      </div>`;
+  });
+  local.forEach((k, i) => {
+    if (k.active === false) return;
+    html += `<div style="padding:3px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:6px">
+      <span>🔖 ${k.label || '未标记'}</span>
+      <code style="font-size:.7rem;color:#888">${k.hash.substring(0,10)}...</code>
+      <span style="font-size:.7rem;color:#aaa">${k.createdAt || ''}</span>
+      <button class="btn btn-danger btn-sm" data-revoke="${i}" style="font-size:.65rem;padding:1px 6px;margin-left:auto">撤销</button>
+      </div>`;
+  });
+  if (!html) html = '<div style="color:#999;font-size:.8rem">暂无密钥。点击"生成新密钥"创建用户密钥。</div>';
+  domAdmin.adminKeyList.innerHTML = html;
+
+  // Revoke buttons
+  domAdmin.adminKeyList.querySelectorAll('[data-revoke]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.revoke);
+      const keys = loadLocalKeys();
+      if (confirm(`确定要撤销密钥 "${keys[idx].label || '未标记'}" 吗？此操作不可恢复。`)) {
+        keys[idx].active = false;
+        saveLocalKeys(keys);
+        refreshAdminPanel();
+      }
+    });
+  });
+}
+
+domAdmin.adminKeyInput.addEventListener('keydown', e => { if (e.key === 'Enter') domAdmin.btnAdminUnlock.click(); });
+
+domAdmin.btnAdminUnlock.addEventListener('click', async () => {
+  const val = domAdmin.adminKeyInput.value.trim();
+  if (!val) return;
+  const hash = await sha256(val);
+  if (DEPLOYED_KEY_HASHES.includes(hash)) {
+    _adminUnlocked = true;
+    domAdmin.adminStatus.style.display = '';
+    domAdmin.adminKeyPanel.style.display = '';
+    domAdmin.adminKeyInput.style.display = 'none';
+    domAdmin.btnAdminUnlock.style.display = 'none';
+    refreshAdminPanel();
+  } else {
+    alert('主密钥错误！');
+  }
+});
+
+domAdmin.btnGenKey.addEventListener('click', () => {
+  if (!_adminUnlocked) return;
+  const label = prompt('请为这个密钥添加标记（如：张三、学生A）：', '用户' + (loadLocalKeys().length + 1));
+  if (label === null) return;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'IELTS-';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  code += '-';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  sha256(code).then(hash => {
+    const keys = loadLocalKeys();
+    keys.push({ hash, label, createdAt: new Date().toLocaleString('zh-CN'), active: true });
+    saveLocalKeys(keys);
+    refreshAdminPanel();
+    alert(`新密钥已生成！\n\n🔑 密钥：${code}\n📝 标记：${label}\n\n请立即复制密钥并分发给用户。此密钥仅在本次显示，之后无法找回。\n\n生成后请点击"导出部署代码"更新 HTML，重新部署后用户即可使用。`);
+  });
+});
+
+domAdmin.btnExportKeys.addEventListener('click', () => { exportDeployCode(); });
+
+domAdmin.btnResetAdmin.addEventListener('click', async () => {
+  if (!_adminUnlocked) return;
+  if (!confirm('确定要重置主密钥吗？\n\n这将清除当前主密钥并设置一个新的。所有已部署的代码需要更新。')) return;
+  const pw1 = prompt('请输入新的主密钥：');
+  if (!pw1) return;
+  const pw2 = prompt('请再次输入确认：');
+  if (pw1 !== pw2) { alert('两次输入不一致！'); return; }
+  if (pw1.length < 4) { alert('主密钥至少需要4个字符！'); return; }
+  const hash = await sha256(pw1);
+  DEPLOYED_KEY_HASHES[0] = hash;
+  localStorage.setItem(LOCK_MASTER_OVERRIDE, hash);
+  alert('主密钥已更新！请点击"导出部署代码"并重新部署。');
+  refreshAdminPanel();
 });
 
 // ==================== 初始化 ====================
